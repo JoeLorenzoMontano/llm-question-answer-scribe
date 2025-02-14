@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: ankane/pgvector
+    container_name: postgres-db
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ollama_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: adminpassword
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  backend:
+    build: ./backend
+    container_name: fastapi-backend
+    restart: always
+    ports:
+      - "8001:8000"
+    environment:
+      DATABASE_URL: postgresql://user:password@postgres:5432/ollama_db
+      OPEN_WEBUI_API_URL: http://192.168.1.203:3001 #REPLACE WITH YOUR SERVER
+      OPEN_WEBUI_API_KEY: sk-0e21bac8a018452d92fad8127578d214
+      TEXTBELT_API_KEY: XYZ #REPLACE WITH YOUR KEY
+    depends_on:
+      - postgres
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  postgres_data:
