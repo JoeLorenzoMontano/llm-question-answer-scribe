@@ -37,7 +37,7 @@ services:
     environment:
       DATABASE_URL: postgresql://user:password@postgres:5432/ollama_db
       OPEN_WEBUI_API_URL: http://192.168.1.203:3001 #REPLACE WITH YOUR SERVER
-      OPEN_WEBUI_API_KEY: sk-0e21bac8a018452d92fad8127578d214
+      OPEN_WEBUI_API_KEY: sk-0e21bac8a018452d92fad8127578d214 #REPLACE WITH YOUR SERVER
       TEXTBELT_API_KEY: XYZ #REPLACE WITH YOUR KEY
     depends_on:
       - postgres
