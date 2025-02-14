@@ -1,12 +1,14 @@
+version: '3.8'
+
 services:
   postgres:
     image: ankane/pgvector
     container_name: postgres-db
     restart: always
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: ollama_db
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
@@ -19,14 +21,12 @@ services:
     container_name: pgadmin
     restart: always
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@example.com
-      PGADMIN_DEFAULT_PASSWORD: adminpassword
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
     ports:
       - "5050:80"
     depends_on:
       - postgres
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
 
   backend:
     build: ./backend
@@ -35,10 +35,10 @@ services:
     ports:
       - "8001:8000"
     environment:
-      DATABASE_URL: postgresql://user:password@postgres:5432/ollama_db
-      OPEN_WEBUI_API_URL: http://192.168.1.203:3001 #REPLACE WITH YOUR SERVER
-      OPEN_WEBUI_API_KEY: sk-0e21bac8a018452d92fad8127578d214 #REPLACE WITH YOUR SERVER
-      TEXTBELT_API_KEY: XYZ #REPLACE WITH YOUR KEY
+      DATABASE_URL: ${DATABASE_URL}
+      OPEN_WEBUI_API_URL: ${OPEN_WEBUI_API_URL}
+      OPEN_WEBUI_API_KEY: ${OPEN_WEBUI_API_KEY}
+      TEXTBELT_API_KEY: ${TEXTBELT_API_KEY}
     depends_on:
       - postgres
     extra_hosts:
