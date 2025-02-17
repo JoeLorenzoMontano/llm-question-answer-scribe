@@ -11,6 +11,7 @@ import numpy as np
 from textbelt_api import TextBeltAPI
 import os
 import re
+import random
 
 # Setup Logging
 logging.basicConfig(
@@ -23,6 +24,9 @@ logging.basicConfig(
 )
 
 textbelt = TextBeltAPI(os.getenv("TEXTBELT_API_KEY"))
+
+def generate_verification_code():
+    return str(random.randint(100000, 999999))
 
 def store_and_return_question(question_text: str, category: str = "general", answer_seed: str = None):
     """

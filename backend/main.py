@@ -1,10 +1,11 @@
 import logging
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
-from textbelt_api import TextBeltAPI
 import os
+from textbelt_api import TextBeltAPI
 from request_models import QuestionRequest, AnswerRequest, AskRequest, QuestionBatch, AnswerText, SMSRequest
-from helpers import store_and_return_question, save_answer_to_db, get_random_question, send_random_question_via_sms, strip_think_tags, generate_new_question, get_question_by_id
+from helpers import store_and_return_question, save_answer_to_db, get_random_question, send_random_question_via_sms, strip_think_tags, generate_new_question, get_question_by_id, generate_verification_code, generate_verification_code
+
 
 TEXTBELT_API_KEY = os.getenv("TEXTBELT_API_KEY")
 ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
@@ -24,6 +25,39 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 
 textbelt = TextBeltAPI(TEXTBELT_API_KEY)
+
+@app.post("/register/")
+def register_user(request: SMSRequest):
+    phone_number = request.phone
+    verification_code = generate_verification_code()
+
+    try:
+        response = textbelt.send_sms(
+            phone_number=phone_number,
+            message=f"Your verification code is {verification_code}",
+            webhook_url="https://question-answer.jolomo.io/verify",
+            webhook_data=verification_code
+        )
+        return {"message": "Verification code sent"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/verify/")
+async def verify_code(request: Request):
+    try:
+        data = await request.json()
+        received_code = data.get("text").strip()
+        expected_code = data.get("data")
+
+        if received_code == expected_code:
+            phone_number = data.get("fromNumber")
+            return send_random_question_via_sms(phone_number)
+        else:
+            raise HTTPException(status_code=400, detail="Invalid verification code")
+
+    except Exception as e:
+        logging.error(f"Error verifying code: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/answer/")
 def store_answer(request: AnswerRequest):
