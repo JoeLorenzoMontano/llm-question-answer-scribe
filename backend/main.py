@@ -54,12 +54,13 @@ class SMSRequest(BaseModel):
     phone: str
     message: str = None
 
-def store_and_return_question(question_text: str, category: str = "general"):
+def store_and_return_question(question_text: str, category: str = "general", answer_seed: str = None):
     """
     Stores a newly generated question in the database and returns the inserted question.
     
     :param question_text: The text of the question to store.
     :param category: The category of the question (default: "general").
+    :param answer_seed: The previous answer UUID that spawned this question response
     :return: A dictionary containing the stored question details.
     """
     question_id = uuid.uuid4()  # Generate unique question ID
@@ -71,8 +72,8 @@ def store_and_return_question(question_text: str, category: str = "general"):
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute(
-            "INSERT INTO questions (question_id, question_text, embedding, category) VALUES (%s, %s, %s, %s)",
-            (str(question_id), question_text, embedding, category)
+            "INSERT INTO questions (question_id, question_text, embedding, category, answer_seed) VALUES (%s, %s, %s, %s, %s)",
+            (str(question_id), question_text, embedding, category, answer_seed)
         )
         conn.commit()
 
@@ -392,14 +393,17 @@ def strip_think_tags(text: str) -> str:
     text = re.sub(r".*?</think>", "", text, flags=re.DOTALL).strip()
     return text
 
-def generate_new_question(original_question: str, user_response: str):
+def generate_new_question(original_question: str, user_response: str, answer_seed: str):
     """
     Generates a new question using an LLM (Ollama) based on the user's previous response.
     """
     prompt = (
-        f"Here is the original question: '{original_question}'"
-        f"Given the user's response: '{user_response}', generate a relevant follow-up question "
-        "that encourages further discussion. Do not contribute or support or elaborate to any response that is problamatic."
+        f"Given the original question: '{original_question}', "
+        f"and the user's response: '{user_response}', "
+        "generate a thoughtful follow-up question that; encourages deeper reflection, learns more about their family, learns more about past experiances or opinions, or exploration of related ideas. "
+        "Ensure the question remains open-ended, engaging, and contextually relevant to the conversation. "
+        "The goal of this Q & A system is to get to know a loved one more and to learn and preserve their prospective."
+        "If the response contains sensitive, problematic, or inappropriate content, do not engage or reinforce it; instead, shift the discussion towards a constructive and neutral topic."
     )
 
     # Query Ollama for a new question
@@ -410,7 +414,7 @@ def generate_new_question(original_question: str, user_response: str):
         logging.error(f"Ollama error: {new_question_text['error']}")
         new_question_text = get_random_question()
 
-    return store_and_return_question(strip_think_tags(new_question_text), "")
+    return store_and_return_question(strip_think_tags(new_question_text), "", answer_seed)
 
 def get_question_by_id(question_id: UUID):
     """
@@ -472,9 +476,10 @@ async def handle_sms_reply(request: Request):
         if message.lower().strip() == "new question":
             return send_random_question_via_sms(phone_number)
         else:
-            save_answer_to_db(webhookData, message)
+            answer = save_answer_to_db(webhookData, message)
+            logging.info(f"Answer: {answer}")
             previous_question = get_question_by_id(webhookData)
-            question = generate_new_question(previous_question.get("question_text"), message)
+            question = generate_new_question(previous_question.get("question_text"), message, answer['answer_id'])
             return textbelt.send_sms(
                 phone_number=phone_number,
                 message=question.get("question_text"),
@@ -486,7 +491,6 @@ async def handle_sms_reply(request: Request):
         logging.error(f"Error processing SMS webhook: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Ensure the FastAPI app runs when executing the script directly
 if __name__ == "__main__":
     logger.info("Starting FastAPI server on http://0.0.0.0:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
