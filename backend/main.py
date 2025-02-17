@@ -2,6 +2,7 @@ import logging
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 import os
+from fastapi.responses import HTMLResponse
 from textbelt_api import TextBeltAPI
 from request_models import QuestionRequest, AnswerRequest, AskRequest, QuestionBatch, AnswerText, SMSRequest
 from helpers import store_and_return_question, save_answer_to_db, get_random_question, send_random_question_via_sms, strip_think_tags, generate_new_question, get_question_by_id, generate_verification_code, generate_verification_code
@@ -9,6 +10,9 @@ from helpers import store_and_return_question, save_answer_to_db, get_random_que
 
 TEXTBELT_API_KEY = os.getenv("TEXTBELT_API_KEY")
 ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
+
+# Store phone numbers & codes in memory (replace with DB in production)
+verification_codes = {}
 
 # Setup Logging
 logging.basicConfig(
@@ -26,11 +30,163 @@ app = FastAPI()
 
 textbelt = TextBeltAPI(TEXTBELT_API_KEY)
 
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    return """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Alpha Test Registration</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                text-align: center;
+                padding: 20px;
+            }
+            .container {
+                max-width: 500px;
+                margin: auto;
+                padding: 20px;
+                border: 1px solid #ddd;
+                border-radius: 10px;
+                background-color: #f9f9f9;
+            }
+            input, button {
+                margin-top: 10px;
+                padding: 10px;
+                width: 80%;
+                font-size: 16px;
+            }
+            button {
+                background-color: #28a745;
+                color: white;
+                border: none;
+                cursor: pointer;
+            }
+            button:hover {
+                background-color: #218838;
+            }
+            .message {
+                margin-top: 10px;
+                font-weight: bold;
+            }
+            #verification-box {
+                display: none;
+            }
+        </style>
+        <script>
+            async function registerUser(event) {
+                event.preventDefault();
+                let phoneNumber = document.getElementById('phone_number').value;
+                let messageDiv = document.getElementById('message');
+
+                if (!phoneNumber) {
+                    messageDiv.innerText = "Please enter a phone number.";
+                    return;
+                }
+
+                // Ensure the phone number is in (555) 555-5555 format
+                let phoneRegex = /^\(\d{3}\) \d{3}-\d{4}$/;
+                if (!phoneRegex.test(phoneNumber)) {
+                    messageDiv.innerText = "Invalid phone number format. Use (555) 555-5555.";
+                    return;
+                }
+
+                messageDiv.innerText = "Sending verification code...";
+
+                try {
+                    let response = await fetch("/register/", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({ phone: phoneNumber })
+                    });
+
+                    let result = await response.json();
+                    messageDiv.innerText = result.message || "Verification code sent!";
+
+                    // Show verification input
+                    document.getElementById("verification-box").style.display = "block";
+                    document.getElementById("phone_number").disabled = true;
+                    document.getElementById("register-btn").disabled = true;
+                    document.getElementById("hidden-phone").value = phoneNumber;
+
+                } catch (error) {
+                    messageDiv.innerText = "Error sending verification code.";
+                }
+            }
+
+            async function verifyCode(event) {
+                event.preventDefault();
+                let phoneNumber = document.getElementById("hidden-phone").value;
+                let code = document.getElementById("verification_code").value;
+                let messageDiv = document.getElementById("verify-message");
+
+                if (!code) {
+                    messageDiv.innerText = "Please enter the verification code.";
+                    return;
+                }
+
+                messageDiv.innerText = "Verifying code...";
+
+                try {
+                    let response = await fetch("/verify/", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            fromNumber: phoneNumber,
+                            text: code,
+                            data: code
+                        })
+                    });
+
+                    let result = await response.json();
+                    messageDiv.innerText = result.message || "Verification successful!";
+
+                } catch (error) {
+                    messageDiv.innerText = "Verification failed.";
+                }
+            }
+        </script>
+    </head>
+    <body>
+        <div class="container">
+            <h2>Welcome to the Alpha Test</h2>
+            <p>We're testing a new AI-driven family scribe system. Enter your phone number below to register and receive a verification code.</p>
+            
+            <form onsubmit="registerUser(event)">
+                <input type="tel" id="phone_number" placeholder="(555) 555-5555" required>
+                <br/>
+                <small>Format: (555) 555-5555</small>
+                <button type="submit" id="register-btn">Register</button>
+            </form>
+            <p class="message" id="message"></p>
+
+            <div id="verification-box">
+                <p>Enter the verification code sent to your phone:</p>
+                <form onsubmit="verifyCode(event)">
+                    <input type="hidden" id="hidden-phone">
+                    <input type="text" id="verification_code" placeholder="Enter code" required>
+                    <button type="submit">Verify</button>
+                </form>
+                <p class="message" id="verify-message"></p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
 @app.post("/register/")
 def register_user(request: SMSRequest):
     phone_number = request.phone
     verification_code = generate_verification_code()
-
+    # Store verification code (temporary storage, replace with DB for production)
+    verification_codes[phone_number] = verification_code
     try:
         response = textbelt.send_sms(
             phone_number=phone_number,
@@ -46,11 +202,18 @@ def register_user(request: SMSRequest):
 async def verify_code(request: Request):
     try:
         data = await request.json()
+        phone_number = data.get("fromNumber")
         received_code = data.get("text").strip()
-        expected_code = data.get("data")
+
+        # Ensure the phone number is in the verification_codes dictionary
+        if phone_number not in verification_codes:
+            raise HTTPException(status_code=400, detail="Phone number not registered or expired.")
+
+        expected_code = verification_codes.get(phone_number)
 
         if received_code == expected_code:
-            phone_number = data.get("fromNumber")
+            # Remove the verification code after successful verification
+            del verification_codes[phone_number]
             return send_random_question_via_sms(phone_number)
         else:
             raise HTTPException(status_code=400, detail="Invalid verification code")
