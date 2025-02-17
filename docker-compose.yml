@@ -39,6 +39,7 @@ services:
       OPEN_WEBUI_API_URL: ${OPEN_WEBUI_API_URL}
       OPEN_WEBUI_API_KEY: ${OPEN_WEBUI_API_KEY}
       TEXTBELT_API_KEY: ${TEXTBELT_API_KEY}
+      ENVIRONMENT: ${ENVIRONMENT}
     depends_on:
       - postgres
     extra_hosts:

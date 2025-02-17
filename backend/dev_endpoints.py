@@ -1,8 +1,14 @@
 import logging
 from fastapi import FastAPI, HTTPException, Request
 from textbelt_api import TextBeltAPI
+from database import get_db_connection
 import os
-from request_models import SMSRequest
+import uuid
+from uuid import UUID
+from open_webui_api import query_ollama, send_assistant_message
+from embeddings import generate_embedding
+import psycopg2.extras  # Needed for dictionary cursorimport os
+from request_models import QuestionRequest, AnswerRequest, AskRequest, QuestionBatch, AnswerText, SMSRequest
 from helpers import send_random_question_via_sms, save_answer_to_db, get_question_by_id, generate_new_question
 
 TEXTBELT_API_KEY = os.getenv("TEXTBELT_API_KEY")
