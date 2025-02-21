@@ -78,25 +78,51 @@ async def index():
             }
         </style>
         <script>
-            async function registerUser(event) {
+            function validateForm(event) {
                 event.preventDefault();
+
+                let username = document.getElementById("username").value;
+                let password = document.getElementById("password").value;
+                let confirmPassword = document.getElementById("confirm_password").value;
+                let phoneNumber = document.getElementById("phone_number").value;
+                let messageDiv = document.getElementById("password-error");
+
+                // Username validation (No spaces, only letters/numbers/_/.)
+                let usernameRegex = /^[a-zA-Z0-9._]{3,30}$/;
+                if (!usernameRegex.test(username)) {
+                    messageDiv.innerText = "Invalid username. Only letters, numbers, '_', and '.' allowed (3-30 chars).";
+                    messageDiv.style.display = "block";
+                    return;
+                }
+
+                // Password validation (No spaces, at least 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special char)
+                let passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$/;
+                if (!passwordRegex.test(password)) {
+                    messageDiv.innerText = "Password must be at least 8 characters, include 1 uppercase, 1 lowercase, 1 number, and 1 special character.";
+                    messageDiv.style.display = "block";
+                    return;
+                }
+
+                // Confirm password match
+                if (password !== confirmPassword) {
+                    messageDiv.innerText = "Passwords do not match.";
+                    messageDiv.style.display = "block";
+                    return;
+                }
+
+                messageDiv.style.display = "none";
+
+                // Submit form if all validations pass
+                registerUser();
+            }
+
+            async function registerUser() {
+                event.preventDefault();
+                
                 let username = document.getElementById('username').value;
                 let password = document.getElementById('password').value;
                 let phoneNumber = document.getElementById('phone_number').value;
-                let messageDiv = document.getElementById('message');
-
-                if (!username || !password || !phoneNumber) {
-                    messageDiv.innerText = "Please fill in all fields.";
-                    return;
-                }
-
-                let phoneRegex = /^\(\d{3}\) \d{3}-\d{4}$/;
-                if (!phoneRegex.test(phoneNumber)) {
-                    messageDiv.innerText = "Invalid phone number format. Use (555) 555-5555.";
-                    return;
-                }
-
-                messageDiv.innerText = "Sending verification code...";
+                let messageDiv = document.getElementById('password-error');
 
                 try {
                     let response = await fetch("/register/", {
@@ -104,19 +130,21 @@ async def index():
                         headers: {
                             "Content-Type": "application/json"
                         },
-                        body: JSON.stringify({ 
+                        body: JSON.stringify({
                             username: username,
                             password: password,
-                            phone: phoneNumber 
+                            phone: phoneNumber
                         })
                     });
 
                     let result = await response.json();
+
                     messageDiv.innerText = result.message || "Verification code sent!";
 
                     document.getElementById("verification-box").style.display = "block";
                     document.getElementById("username").disabled = true;
                     document.getElementById("password").disabled = true;
+                    document.getElementById("confirm_password").disabled = true;
                     document.getElementById("phone_number").disabled = true;
                     document.getElementById("register-btn").disabled = true;
                     document.getElementById("hidden-phone").value = phoneNumber;
@@ -156,11 +184,29 @@ async def index():
                         throw new Error(errorData.detail || "Verification failed.");
                     }
 
+                    document.getElementById("verify_button").disabled = true;
                     let result = await response.json();
                     messageDiv.innerText = result.message || "Verification successful!";
 
                 } catch (error) {
                     messageDiv.innerText = error.message;
+                }
+            }
+
+            function formatPhoneNumber(input) {
+                let value = input.value.replace(/\D/g, ""); // Remove all non-numeric characters
+
+                if (value.length > 10) {
+                    value = value.substring(0, 10); // Limit input to 10 digits
+                }
+
+                // Format as (555) 555-5555
+                if (value.length > 6) {
+                    input.value = `(${value.substring(0, 3)}) ${value.substring(3, 6)}-${value.substring(6)}`;
+                } else if (value.length > 3) {
+                    input.value = `(${value.substring(0, 3)}) ${value.substring(3)}`;
+                } else if (value.length > 0) {
+                    input.value = `(${value}`;
                 }
             }
 
@@ -171,14 +217,25 @@ async def index():
             <h2>Welcome to the Alpha Test</h2>
             <p>We're testing a new AI-driven family scribe system. Enter your phone number below to register and receive a verification code.</p>
             
-            <form onsubmit="registerUser(event)">
+            <form onsubmit="validateForm(event)">
                 <input type="text" id="username" placeholder="Username" required>
                 <input type="password" id="password" placeholder="Password" required>
-                <input type="tel" id="phone_number" placeholder="(555) 555-5555" required>
+                <input type="password" id="confirm_password" placeholder="Confirm Password" required>
+                <input type="tel" id="phone_number" placeholder="(555) 555-5555" required maxlength="14" oninput="formatPhoneNumber(this)">
                 <br/>
-                <small>Format: (555) 555-5555</small>
-                <button type="submit" id="register-btn">Register</button>
+                <p id="password-error" style="color: red; display: none;">Passwords do not match.</p>
+                <table style='width: 100%;'>
+                    <tr>
+                        <td style='width: 50%;'>
+                            <button type="submit" id="register-btn">Register</button>
+                        </td>
+                        <td style='width: 50%;'>
+                            <button type="submit" id="resend-btn" disabled>Resend Code</button>
+                        </td>
+                    </tr>
+                </table>
             </form>
+
             <p class="message" id="message"></p>
 
             <div id="verification-box">
@@ -186,7 +243,7 @@ async def index():
                 <form onsubmit="verifyCode(event)">
                     <input type="hidden" id="hidden-phone">
                     <input type="text" id="verification_code" placeholder="Enter code" required>
-                    <button type="submit">Verify</button>
+                    <button id="verify_button" type="submit">Verify</button>
                 </form>
                 <p class="message" id="verify-message"></p>
             </div>
@@ -197,16 +254,22 @@ async def index():
 
 @app.post("/register/")
 def register_user(request: RegistrationRequest):
-    verification_code = generate_verification_code()
-    add_new_user(request, verification_code)
     try:
+        verification_code = generate_verification_code()
+        if not add_new_user(request, verification_code):
+            raise HTTPException(status_code=400, detail="Phone number already registered")
+
         response = textbelt.send_sms(
             phone_number=request.phone,
             message=f"Your verification code is {verification_code}"
         )
         return {"message": "Verification code sent"}
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))  # Handle invalid username/password errors
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
 @app.post("/verify/")
 async def verify_code(request: Request):

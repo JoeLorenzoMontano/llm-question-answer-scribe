@@ -4,9 +4,16 @@ from passlib.context import CryptContext
 from request_models import RegistrationRequest
 import uuid
 import os
+import re
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+def is_valid_username(username: str) -> bool:
+    return bool(re.match(r"^[a-zA-Z0-9._]{3,30}$", username))
+
+def is_valid_password(password: str) -> bool:
+    return bool(re.match(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$", password))
+    
 def get_db_connection():
     conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
     return conn
@@ -16,21 +23,44 @@ def hash_password(password: str) -> str:
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
     return pwd_context.hash(password)
 
-def add_new_user(request: RegistrationRequest, verification_code: str):
+def add_new_user(request: RegistrationRequest, verification_code: str) -> bool:
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-    user_id = str(uuid.uuid4())
-    hashed_password = hash_password(request.password)
+    try:
+        # Validate username & password
+        if not is_valid_username(request.username):
+            raise ValueError("Invalid username format.")
+        if not is_valid_password(request.password):
+            raise ValueError("Password does not meet security standards.")
 
-    cursor.execute(
-        "INSERT INTO users (id, username, password_hash, phone_number, verification_code, is_verified) VALUES (%s, %s, %s, %s, %s, %s)",
-        (user_id, request.username, hashed_password, request.phone, verification_code, False)
-    )
+        # Check if phone number already exists
+        cursor.execute("SELECT id FROM users WHERE phone_number = %s", (request.phone,))
+        existing_user = cursor.fetchone()
 
-    conn.commit()
-    cursor.close()
-    conn.close()
+        if existing_user:
+            return False 
+
+        # Generate a new UUID for the user
+        user_id = str(uuid.uuid4())
+        hashed_password = hash_password(request.password)
+
+        cursor.execute(
+            "INSERT INTO users (id, username, password_hash, phone_number, verification_code, is_verified) VALUES (%s, %s, %s, %s, %s, %s)",
+            (user_id, request.username, hashed_password, request.phone, verification_code, False)
+        )
+
+        conn.commit()
+        return True
+
+    except Exception as e:
+        print(f"Error adding new user: {e}")
+        conn.rollback()
+        return False
+
+    finally:
+        cursor.close()
+        conn.close()
 
 def verify_user(phone_number: str, input_code: str) -> bool:
     conn = get_db_connection()

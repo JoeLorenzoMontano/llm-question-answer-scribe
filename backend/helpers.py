@@ -185,10 +185,14 @@ def generate_new_question(original_question: str, user_response: str, answer_see
     prompt = (
         f"Given the original question: '{original_question}', "
         f"and the user's response: '{user_response}', "
-        "generate a thoughtful follow-up question that; encourages deeper reflection, learns more about their family, learns more about past experiances or opinions, or exploration of related ideas. "
-        "Ensure the question remains open-ended, engaging, and contextually relevant to the conversation. "
-        "The goal of this Q & A system is to get to know a loved one more and to learn and preserve their prospective."
-        "If the response contains sensitive, problematic, or inappropriate content, do not engage or reinforce it; instead, shift the discussion towards a constructive and neutral topic."
+        "generate a natural-sounding follow-up question that deepens the conversation. "
+        "The question should feel personal and engaging, encouraging the user to share more about their stories, experiences, family, thoughts, values, or memories in a way that fosters connection. "
+        "It should be open-ended but easy to answer, avoiding complex or unnatural phrasing. "
+        "If the response hints at an interesting memory, relationship, or feeling, gently guide the conversation to explore it further. "
+        "If the user shares something heartfelt, ask about their emotions or perspective at the time. "
+        "If they reflect on a lesson or belief, encourage them to expand on how it shaped them. "
+        "If the response contains sensitive, problematic, or inappropriate content, gracefully steer the discussion toward a positive and meaningful topic. "
+        "Above all, ensure that the follow-up feels like something a caring family member or close friend would naturally ask in a warm, curious, and supportive way."
     )
 
     # Query Ollama for a new question
