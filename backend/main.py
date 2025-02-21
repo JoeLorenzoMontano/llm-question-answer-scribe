@@ -2,9 +2,10 @@ import logging
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 import os
+from database import add_new_user, verify_user
 from fastapi.responses import HTMLResponse
 from textbelt_api import TextBeltAPI
-from request_models import QuestionRequest, AnswerRequest, AskRequest, QuestionBatch, AnswerText, SMSRequest
+from request_models import QuestionRequest, AnswerRequest, AskRequest, QuestionBatch, AnswerText, SMSRequest, RegistrationRequest
 from helpers import store_and_return_question, save_answer_to_db, get_random_question, send_random_question_via_sms, strip_think_tags, generate_new_question, get_question_by_id, generate_verification_code, generate_verification_code
 
 
@@ -79,15 +80,16 @@ async def index():
         <script>
             async function registerUser(event) {
                 event.preventDefault();
+                let username = document.getElementById('username').value;
+                let password = document.getElementById('password').value;
                 let phoneNumber = document.getElementById('phone_number').value;
                 let messageDiv = document.getElementById('message');
 
-                if (!phoneNumber) {
-                    messageDiv.innerText = "Please enter a phone number.";
+                if (!username || !password || !phoneNumber) {
+                    messageDiv.innerText = "Please fill in all fields.";
                     return;
                 }
 
-                // Ensure the phone number is in (555) 555-5555 format
                 let phoneRegex = /^\(\d{3}\) \d{3}-\d{4}$/;
                 if (!phoneRegex.test(phoneNumber)) {
                     messageDiv.innerText = "Invalid phone number format. Use (555) 555-5555.";
@@ -102,18 +104,22 @@ async def index():
                         headers: {
                             "Content-Type": "application/json"
                         },
-                        body: JSON.stringify({ phone: phoneNumber })
+                        body: JSON.stringify({ 
+                            username: username,
+                            password: password,
+                            phone: phoneNumber 
+                        })
                     });
 
                     let result = await response.json();
                     messageDiv.innerText = result.message || "Verification code sent!";
 
-                    // Show verification input
                     document.getElementById("verification-box").style.display = "block";
+                    document.getElementById("username").disabled = true;
+                    document.getElementById("password").disabled = true;
                     document.getElementById("phone_number").disabled = true;
                     document.getElementById("register-btn").disabled = true;
                     document.getElementById("hidden-phone").value = phoneNumber;
-
                 } catch (error) {
                     messageDiv.innerText = "Error sending verification code.";
                 }
@@ -140,18 +146,24 @@ async def index():
                         },
                         body: JSON.stringify({
                             fromNumber: phoneNumber,
-                            text: code,
-                            data: code
+                            code: code,
                         })
                     });
+
+                    if (!response.ok) {
+                        // Handle HTTP errors properly
+                        let errorData = await response.json();
+                        throw new Error(errorData.detail || "Verification failed.");
+                    }
 
                     let result = await response.json();
                     messageDiv.innerText = result.message || "Verification successful!";
 
                 } catch (error) {
-                    messageDiv.innerText = "Verification failed.";
+                    messageDiv.innerText = error.message;
                 }
             }
+
         </script>
     </head>
     <body>
@@ -160,6 +172,8 @@ async def index():
             <p>We're testing a new AI-driven family scribe system. Enter your phone number below to register and receive a verification code.</p>
             
             <form onsubmit="registerUser(event)">
+                <input type="text" id="username" placeholder="Username" required>
+                <input type="password" id="password" placeholder="Password" required>
                 <input type="tel" id="phone_number" placeholder="(555) 555-5555" required>
                 <br/>
                 <small>Format: (555) 555-5555</small>
@@ -182,17 +196,13 @@ async def index():
     """
 
 @app.post("/register/")
-def register_user(request: SMSRequest):
-    phone_number = request.phone
+def register_user(request: RegistrationRequest):
     verification_code = generate_verification_code()
-    # Store verification code (temporary storage, replace with DB for production)
-    verification_codes[phone_number] = verification_code
+    add_new_user(request, verification_code)
     try:
         response = textbelt.send_sms(
-            phone_number=phone_number,
-            message=f"Your verification code is {verification_code}",
-            webhook_url="https://question-answer.jolomo.io/verify",
-            webhook_data=verification_code
+            phone_number=request.phone,
+            message=f"Your verification code is {verification_code}"
         )
         return {"message": "Verification code sent"}
     except Exception as e:
@@ -203,17 +213,8 @@ async def verify_code(request: Request):
     try:
         data = await request.json()
         phone_number = data.get("fromNumber")
-        received_code = data.get("text").strip()
-
-        # Ensure the phone number is in the verification_codes dictionary
-        if phone_number not in verification_codes:
-            raise HTTPException(status_code=400, detail="Phone number not registered or expired.")
-
-        expected_code = verification_codes.get(phone_number)
-
-        if received_code == expected_code:
-            # Remove the verification code after successful verification
-            del verification_codes[phone_number]
+        received_code = data.get("code").strip()
+        if verify_user(phone_number, received_code):
             return send_random_question_via_sms(phone_number)
         else:
             raise HTTPException(status_code=400, detail="Invalid verification code")

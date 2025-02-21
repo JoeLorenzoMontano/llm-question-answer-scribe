@@ -21,3 +21,8 @@ class AnswerText(BaseModel):
 
 class SMSRequest(BaseModel):
     phone: str
+
+class RegistrationRequest(BaseModel):
+    username: str
+    password: str
+    phone: str
