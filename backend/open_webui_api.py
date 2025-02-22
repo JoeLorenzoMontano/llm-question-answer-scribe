@@ -4,7 +4,7 @@ import os
 OPEN_WEBUI_API_URL = os.getenv("OPEN_WEBUI_API_URL")
 OPEN_WEBUI_API_KEY = os.getenv("OPEN_WEBUI_API_KEY")
 
-def query_ollama(prompt: str, model: str = "deepseek-r1:8b", history: list = None, temperature: float = 0.7, max_tokens: int = 512):
+def query_ollama(prompt: str, model: str = "deepseek-r1:8b", history: list = None, temperature: float = 0.7, max_tokens: int = 1024):
     """
     Send a query to Ollama and return the response.
     

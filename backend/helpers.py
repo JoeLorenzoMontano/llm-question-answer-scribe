@@ -191,6 +191,8 @@ def generate_new_question(original_question: str, user_response: str, answer_see
         "If the response hints at an interesting memory, relationship, or feeling, gently guide the conversation to explore it further. "
         "If the user shares something heartfelt, ask about their emotions or perspective at the time. "
         "If they reflect on a lesson or belief, encourage them to expand on how it shaped them. "
+        "If a natural end of the conversation is reached, then ask a new quesiton about either a similar topic or something new."
+        "**ONLY RETURN THE ANSWER IN YOUR RESPONSE, DO NOT INCLUDE NOTES OR EXPLANATIONS. ONLY THE ANSWER SHOULD BE RETURNED**"
         "If the response contains sensitive, problematic, or inappropriate content, gracefully steer the discussion toward a positive and meaningful topic. "
         "Above all, ensure that the follow-up feels like something a caring family member or close friend would naturally ask in a warm, curious, and supportive way."
     )
