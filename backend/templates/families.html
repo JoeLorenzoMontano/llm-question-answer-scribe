@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Family Management</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --light-bg: #f3f4f6;
+            --dark-text: #1f2937;
+            --light-text: #f9fafb;
+            --border-radius: 12px;
+            --success: #10b981;
+            --error: #ef4444;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            line-height: 1.6;
+            color: var(--dark-text);
+            background-color: var(--light-bg);
+            margin: 0;
+            padding: 0;
+        }
+        
+        .container {
+            max-width: 1024px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding: 1rem;
+            background-color: white;
+            border-radius: var(--border-radius);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1, h2, h3 {
+            color: var(--primary-color);
+        }
+        
+        .card {
+            background-color: white;
+            border-radius: var(--border-radius);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .family-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: transform 0.2s;
+        }
+        
+        .family-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .family-info {
+            flex-grow: 1;
+        }
+        
+        .family-name {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        
+        .member-count {
+            color: #6b7280;
+            font-size: 0.875rem;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        button, .btn {
+            display: inline-block;
+            background-color: var(--primary-color);
+            color: white;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            text-decoration: none;
+            text-align: center;
+        }
+        
+        button:hover, .btn:hover {
+            background-color: #1d4ed8;
+        }
+        
+        .btn-secondary {
+            background-color: #e5e7eb;
+            color: #374151;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #d1d5db;
+        }
+        
+        .create-family {
+            margin-top: 2rem;
+        }
+        
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        label {
+            font-weight: 500;
+        }
+        
+        input {
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            font-size: 1rem;
+        }
+        
+        .error-message {
+            color: var(--error);
+            font-size: 0.875rem;
+        }
+        
+        .success-message {
+            color: var(--success);
+            font-size: 0.875rem;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        
+        .modal.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        .modal-content {
+            background-color: white;
+            border-radius: var(--border-radius);
+            padding: 2rem;
+            width: 100%;
+            max-width: 500px;
+            transform: translateY(-20px);
+            transition: transform 0.3s;
+        }
+        
+        .modal.active .modal-content {
+            transform: translateY(0);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #6b7280;
+        }
+        
+        .member-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .member-item {
+            padding: 0.75rem;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .member-item:last-child {
+            border-bottom: none;
+        }
+        
+        .member-name {
+            font-weight: 500;
+        }
+        
+        .member-phone {
+            color: #6b7280;
+            font-size: 0.875rem;
+        }
+        
+        @media (max-width: 640px) {
+            .container {
+                padding: 12px;
+            }
+            
+            .family-card {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .actions {
+                margin-top: 1rem;
+                width: 100%;
+            }
+            
+            .btn {
+                flex: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Family Management</h1>
+            <p>View and manage your family connections.</p>
+            <nav>
+                <a href="/chat-history" class="btn btn-secondary">Back to Chat History</a>
+            </nav>
+        </header>
+        
+        <div id="families-list">
+            <h2>Your Families</h2>
+            <div id="families-container">
+                <div class="card family-card">
+                    <div class="family-info">
+                        <div class="family-name">Montano Family</div>
+                        <div class="member-count">3 members</div>
+                    </div>
+                    <div class="actions">
+                        <button class="btn" onclick="viewMembers('1')">View Members</button>
+                        <button class="btn btn-secondary" onclick="addMember('1')">Add Member</button>
+                    </div>
+                </div>
+                
+                <!-- More family cards would be rendered here -->
+            </div>
+        </div>
+        
+        <div class="card create-family">
+            <h2>Create New Family</h2>
+            <form id="create-family-form">
+                <div>
+                    <label for="family-name">Family Name:</label>
+                    <input type="text" id="family-name" name="family_name" required>
+                </div>
+                <button type="submit" class="btn">Create Family</button>
+            </form>
+            <p id="create-message" class="success-message hidden"></p>
+        </div>
+    </div>
+    
+    <!-- View Members Modal -->
+    <div id="members-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="family-title">Family Members</h2>
+                <button class="close-modal" onclick="closeModal('members-modal')">&times;</button>
+            </div>
+            <div id="members-container">
+                <ul class="member-list">
+                    <!-- Members will be loaded here -->
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Add Member Modal -->
+    <div id="add-member-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add Family Member</h2>
+                <button class="close-modal" onclick="closeModal('add-member-modal')">&times;</button>
+            </div>
+            <form id="add-member-form">
+                <input type="hidden" id="family-id" name="family_id">
+                <div>
+                    <label for="phone-number">Phone Number:</label>
+                    <input type="tel" id="phone-number" name="phone_number" placeholder="(555) 555-5555" required>
+                </div>
+                <button type="submit" class="btn">Add Member</button>
+            </form>
+            <p id="add-message" class="error-message hidden"></p>
+        </div>
+    </div>
+    
+    <script>
+        // Load families when the page loads
+        document.addEventListener('DOMContentLoaded', loadFamilies);
+        
+        // Handle form submissions
+        document.getElementById('create-family-form').addEventListener('submit', createFamily);
+        document.getElementById('add-member-form').addEventListener('submit', submitAddMember);
+        
+        // Format phone number as user types
+        document.getElementById('phone-number').addEventListener('input', function(e) {
+            let input = e.target;
+            let value = input.value.replace(/\D/g, ''); // Remove non-digits
+            
+            if (value.length > 10) {
+                value = value.substring(0, 10); // Limit to 10 digits
+            }
+            
+            // Format as (555) 555-5555
+            if (value.length > 6) {
+                input.value = `(${value.substring(0, 3)}) ${value.substring(3, 6)}-${value.substring(6)}`;
+            } else if (value.length > 3) {
+                input.value = `(${value.substring(0, 3)}) ${value.substring(3)}`;
+            } else if (value.length > 0) {
+                input.value = `(${value}`;
+            }
+        });
+        
+        // Load families from the API
+        async function loadFamilies() {
+            try {
+                const response = await fetch('/api/families/list');
+                if (!response.ok) {
+                    throw new Error('Failed to load families');
+                }
+                
+                const families = await response.json();
+                const container = document.getElementById('families-container');
+                
+                // Clear existing content
+                container.innerHTML = '';
+                
+                if (families.length === 0) {
+                    container.innerHTML = '<p>You don\'t have any families yet. Create one below!</p>';
+                    return;
+                }
+                
+                // Render each family
+                families.forEach(family => {
+                    const card = document.createElement('div');
+                    card.className = 'card family-card';
+                    card.innerHTML = `
+                        <div class="family-info">
+                            <div class="family-name">${family.family_name}</div>
+                            <div class="member-count">${family.member_count} members</div>
+                        </div>
+                        <div class="actions">
+                            <button class="btn" onclick="viewMembers('${family.id}')">View Members</button>
+                            <button class="btn btn-secondary" onclick="addMember('${family.id}')">Add Member</button>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+                
+            } catch (error) {
+                console.error('Error loading families:', error);
+            }
+        }
+        
+        // Create a new family
+        async function createFamily(event) {
+            event.preventDefault();
+            
+            const familyName = document.getElementById('family-name').value;
+            const messageEl = document.getElementById('create-message');
+            
+            try {
+                const response = await fetch('/api/families', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        family_name: familyName
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to create family');
+                }
+                
+                const newFamily = await response.json();
+                
+                // Show success message
+                messageEl.textContent = `Family "${familyName}" created successfully!`;
+                messageEl.className = 'success-message';
+                
+                // Clear form
+                document.getElementById('family-name').value = '';
+                
+                // Reload families
+                loadFamilies();
+                
+                // Hide message after 3 seconds
+                setTimeout(() => {
+                    messageEl.className = 'success-message hidden';
+                }, 3000);
+                
+            } catch (error) {
+                messageEl.textContent = error.message;
+                messageEl.className = 'error-message';
+            }
+        }
+        
+        // View family members
+        async function viewMembers(familyId) {
+            try {
+                const response = await fetch(`/api/families/${familyId}/members`);
+                if (!response.ok) {
+                    throw new Error('Failed to load family members');
+                }
+                
+                const data = await response.json();
+                const membersContainer = document.getElementById('members-container');
+                const familyTitle = document.getElementById('family-title');
+                
+                // Update modal title
+                familyTitle.textContent = `${data.family_name} Members`;
+                
+                // Clear existing content
+                const membersList = document.querySelector('#members-container .member-list');
+                membersList.innerHTML = '';
+                
+                // Render each member
+                data.members.forEach(member => {
+                    const item = document.createElement('li');
+                    item.className = 'member-item';
+                    item.innerHTML = `
+                        <div>
+                            <div class="member-name">${member.username}</div>
+                            <div class="member-phone">${member.phone_number}</div>
+                        </div>
+                        <div>
+                            ${member.is_verified ? '<span class="badge verified">Verified</span>' : '<span class="badge pending">Pending</span>'}
+                        </div>
+                    `;
+                    membersList.appendChild(item);
+                });
+                
+                // Show modal
+                openModal('members-modal');
+                
+            } catch (error) {
+                console.error('Error loading family members:', error);
+                alert('Could not load family members. Please try again.');
+            }
+        }
+        
+        // Add a family member
+        function addMember(familyId) {
+            document.getElementById('family-id').value = familyId;
+            openModal('add-member-modal');
+        }
+        
+        async function submitAddMember(event) {
+            event.preventDefault();
+            
+            const familyId = document.getElementById('family-id').value;
+            const phoneNumber = document.getElementById('phone-number').value;
+            const messageEl = document.getElementById('add-message');
+            
+            try {
+                const response = await fetch(`/api/families/${familyId}/members`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        phone_number: phoneNumber
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to add family member');
+                }
+                
+                // Clear form and close modal
+                document.getElementById('phone-number').value = '';
+                closeModal('add-member-modal');
+                
+                // Reload family members if the modal is open
+                if (document.getElementById('members-modal').classList.contains('active')) {
+                    viewMembers(familyId);
+                }
+                
+            } catch (error) {
+                messageEl.textContent = error.message;
+                messageEl.className = 'error-message';
+            }
+        }
+        
+        // Modal functions
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+        }
+        
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+    </script>
+</body>
+</html>
