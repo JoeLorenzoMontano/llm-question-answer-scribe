@@ -1,0 +1,28 @@
+-- Insert questions from questions.json
+INSERT INTO questions (question_text, category)
+VALUES
+    ('What is one core value that guides your life decisions?', 'Personal Values, Life Decisions, Self-Growth, Core Beliefs, Principles'),
+    ('How do you define happiness, and what brings you the most joy?', 'Emotions, Happiness, Self-Reflection, Joy, Fulfillment'),
+    ('If you could relive any moment in your life, what would it be and why?', 'Life Reflection, Memories, Nostalgia, Regret, Past Experiences'),
+    ('What is something you used to believe but have since changed your mind about?', 'Growth, Changing Perspectives, Learning, Beliefs, Mindset Shift'),
+    ('What does success mean to you, and how do you measure it?', 'Success, Ambition, Self-Worth, Achievement, Personal Goals'),
+    ('Who has had the most profound impact on your life, and why?', 'Relationships, Influence, Mentors, Role Models, Guidance'),
+    ('If you could give advice to your younger self, what would it be?', 'Life Advice, Wisdom, Reflection, Lessons, Self-Growth'),
+    ('How do you handle failure, and what is the biggest lesson you''ve learned from one?', 'Resilience, Failure, Growth, Overcoming Obstacles, Learning'),
+    ('What is one fear you have overcome, and how did you do it?', 'Overcoming Challenges, Mental Strength, Fear, Courage, Personal Growth'),
+    ('Do you believe in destiny, free will, or a mix of both? Why?', 'Philosophy, Free Will, Destiny, Fate, Belief Systems'),
+    ('How do you typically approach making difficult decisions?', 'Decision Making, Problem Solving, Strategy, Critical Thinking, Choices'),
+    ('What role does empathy play in your everyday life?', 'Emotional Intelligence, Relationships, Kindness, Compassion, Understanding'),
+    ('What is a personal habit or routine that positively impacts your well-being?', 'Health, Well-being, Routines, Habits, Mental Health'),
+    ('If you could spend a day with any historical figure, who would it be and why?', 'History, Legacy, Inspiration, Leaders, Icons'),
+    ('How do you think your upbringing has shaped your worldview?', 'Childhood, Personal Development, Worldview, Family, Environment'),
+    ('What is one childhood memory that still influences you today?', 'Memories, Childhood, Nostalgia, Past Experiences, Growth'),
+    ('How do you approach conflict in personal relationships?', 'Conflict Resolution, Relationships, Communication, Disagreements, Problem Solving'),
+    ('What do you think is the most important lesson parents should teach their children?', 'Parenting, Life Lessons, Values, Education, Family'),
+    ('How do you express love and appreciation for the people in your life?', 'Love, Relationships, Appreciation, Connection, Gratitude'),
+    ('If you had unlimited resources, how would you use them to improve the world?', 'Impact, Change, Philanthropy, Helping Others, Society'),
+    ('What do you think happens after death?', 'Philosophy, Afterlife, Spirituality, Death, Existence'),
+    ('What is something creative you have always wanted to pursue?', 'Creativity, Passion, Art, Music, Writing, Hobbies'),
+    ('How do you balance personal ambition with the well-being of those around you?', 'Balance, Ambition, Relationships, Well-being, Priorities'),
+    ('If you could instantly master one skill, what would it be and why?', 'Skill Development, Learning, Mastery, Knowledge, Growth'),
+    ('What do you believe is the key to living a fulfilling life?', 'Fulfillment, Purpose, Life Satisfaction, Meaning, Happiness');
