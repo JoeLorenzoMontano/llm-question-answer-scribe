@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
 class QuestionRequest(BaseModel):
     question: str
@@ -26,3 +26,10 @@ class RegistrationRequest(BaseModel):
     username: str
     password: str
     phone: str
+    
+class ChatHistoryRequest(BaseModel):
+    phone: str
+    
+class VerifyCodeRequest(BaseModel):
+    phone: str
+    code: str

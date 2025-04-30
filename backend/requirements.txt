@@ -6,3 +6,5 @@ numpy
 requests
 pydantic
 passlib
+jinja2
+python-multipart

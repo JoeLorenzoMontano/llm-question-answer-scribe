@@ -1,12 +1,15 @@
 import logging
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Form, Depends
 import os
-from database import add_new_user, verify_user
-from fastapi.responses import HTMLResponse
+from database import add_new_user, verify_user, get_user_chat_history, generate_auth_code
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from textbelt_api import TextBeltAPI
-from request_models import QuestionRequest, AnswerRequest, AskRequest, QuestionBatch, AnswerText, SMSRequest, RegistrationRequest
-from helpers import store_and_return_question, save_answer_to_db, get_random_question, send_random_question_via_sms, strip_think_tags, generate_new_question, get_question_by_id, generate_verification_code, generate_verification_code
+from request_models import QuestionRequest, AnswerRequest, AskRequest, QuestionBatch, AnswerText, SMSRequest, RegistrationRequest, ChatHistoryRequest, VerifyCodeRequest
+from helpers import store_and_return_question, save_answer_to_db, get_random_question, send_random_question_via_sms, strip_think_tags, generate_new_question, get_question_by_id, generate_verification_code
 
 
 TEXTBELT_API_KEY = os.getenv("TEXTBELT_API_KEY")
@@ -28,6 +31,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
+
+# Configure Jinja2 templates
+templates = Jinja2Templates(directory="templates")
 
 textbelt = TextBeltAPI(TEXTBELT_API_KEY)
 
@@ -340,6 +346,155 @@ async def handle_sms_reply(request: Request):
     except Exception as e:
         logging.error(f"Error processing SMS webhook: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# Chat history endpoints
+@app.get("/chat-history", response_class=HTMLResponse)
+async def chat_history(request: Request):
+    """
+    Display the chat history page - initial view with phone number entry form
+    """
+    return templates.TemplateResponse(
+        "chat_history.html", 
+        {"request": request, "phone_verified": False, "verification_sent": False}
+    )
+
+@app.post("/request-chat-code")
+async def request_chat_code(request: Request, phone: str = Form(...)):
+    """
+    Handle request for a verification code to view chat history
+    """
+    try:
+        # Clean phone number format
+        clean_phone = phone.replace("(", "").replace(")", "").replace(" ", "").replace("-", "")
+        
+        # Generate verification code
+        verification_code = generate_auth_code(clean_phone)
+        
+        if isinstance(verification_code, dict) and "error" in verification_code:
+            # Handle error case
+            return templates.TemplateResponse(
+                "chat_history.html", 
+                {
+                    "request": request, 
+                    "phone_verified": False, 
+                    "verification_sent": False,
+                    "error": verification_code["error"]
+                }
+            )
+        
+        # Send the verification code via SMS
+        response = textbelt.send_sms(
+            phone_number=clean_phone,
+            message=f"Your chat history verification code is: {verification_code}"
+        )
+        
+        if not response.get("success", False):
+            return templates.TemplateResponse(
+                "chat_history.html", 
+                {
+                    "request": request, 
+                    "phone_verified": False, 
+                    "verification_sent": False,
+                    "error": "Failed to send verification code. Please try again."
+                }
+            )
+        
+        # Show verification code entry form
+        return templates.TemplateResponse(
+            "chat_history.html", 
+            {
+                "request": request, 
+                "phone_verified": False, 
+                "verification_sent": True,
+                "phone_number": clean_phone
+            }
+        )
+        
+    except Exception as e:
+        logging.error(f"Error requesting chat code: {e}")
+        return templates.TemplateResponse(
+            "chat_history.html", 
+            {
+                "request": request, 
+                "phone_verified": False, 
+                "verification_sent": False,
+                "error": "An unexpected error occurred. Please try again."
+            }
+        )
+
+@app.post("/verify-chat-code")
+async def verify_chat_code(request: Request, phone: str = Form(...), code: str = Form(...)):
+    """
+    Verify the code and show chat history if valid
+    """
+    try:
+        # Clean phone number
+        clean_phone = phone.replace("(", "").replace(")", "").replace(" ", "").replace("-", "")
+        
+        # Verify the code
+        is_valid = verify_user(clean_phone, code)
+        
+        if not is_valid:
+            return templates.TemplateResponse(
+                "chat_history.html", 
+                {
+                    "request": request, 
+                    "phone_verified": False, 
+                    "verification_sent": True,
+                    "phone_number": clean_phone,
+                    "error": "Invalid verification code. Please try again."
+                }
+            )
+        
+        # Get chat history for this user
+        chat_history = get_user_chat_history(clean_phone)
+        
+        if isinstance(chat_history, dict) and "error" in chat_history:
+            return templates.TemplateResponse(
+                "chat_history.html", 
+                {
+                    "request": request, 
+                    "phone_verified": False, 
+                    "verification_sent": False,
+                    "error": chat_history["error"]
+                }
+            )
+        
+        # Format dates for display
+        import datetime
+        
+        for message in chat_history:
+            if message["timestamp"]:
+                # Parse ISO format timestamp
+                try:
+                    dt = datetime.datetime.fromisoformat(message["timestamp"])
+                    # Format it in a more user-friendly way
+                    message["timestamp"] = dt.strftime("%b %d, %Y at %I:%M %p")
+                except (ValueError, TypeError):
+                    message["timestamp"] = "Unknown time"
+        
+        # Show chat history
+        return templates.TemplateResponse(
+            "chat_history.html", 
+            {
+                "request": request, 
+                "phone_verified": True, 
+                "phone_number": clean_phone,
+                "chat_history": chat_history
+            }
+        )
+        
+    except Exception as e:
+        logging.error(f"Error verifying chat code: {e}")
+        return templates.TemplateResponse(
+            "chat_history.html", 
+            {
+                "request": request, 
+                "phone_verified": False, 
+                "verification_sent": False,
+                "error": "An unexpected error occurred. Please try again."
+            }
+        )
 
 # Conditionally include dev endpoints
 if ENVIRONMENT in ["development", "testing"]:

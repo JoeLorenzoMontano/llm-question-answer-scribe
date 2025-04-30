@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat History</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --light-bg: #f3f4f6;
+            --dark-text: #1f2937;
+            --light-text: #f9fafb;
+            --user-msg-bg: #dbeafe;
+            --assistant-msg-bg: #e5e7eb;
+            --border-radius: 12px;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            line-height: 1.6;
+            color: var(--dark-text);
+            background-color: var(--light-bg);
+            margin: 0;
+            padding: 0;
+        }
+        
+        .container {
+            max-width: 768px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding: 1rem;
+            background-color: white;
+            border-radius: var(--border-radius);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+        
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .message {
+            padding: 1rem;
+            border-radius: var(--border-radius);
+            max-width: 80%;
+            position: relative;
+        }
+        
+        .user {
+            background-color: var(--primary-color);
+            color: var(--light-text);
+            align-self: flex-end;
+            border-bottom-right-radius: 0;
+        }
+        
+        .assistant {
+            background-color: var(--assistant-msg-bg);
+            color: var(--dark-text);
+            align-self: flex-start;
+            border-bottom-left-radius: 0;
+        }
+        
+        .timestamp {
+            font-size: 0.75rem;
+            color: rgba(0, 0, 0, 0.5);
+            margin-top: 0.5rem;
+            text-align: right;
+        }
+        
+        .user .timestamp {
+            color: rgba(255, 255, 255, 0.7);
+        }
+        
+        .login-container {
+            background-color: white;
+            padding: 2rem;
+            border-radius: var(--border-radius);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
+            margin: 2rem auto;
+        }
+        
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        label {
+            font-weight: 600;
+        }
+        
+        input {
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+        }
+        
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 0.75rem 1rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+        
+        button:hover {
+            background-color: #1d4ed8;
+        }
+        
+        .error-message {
+            color: #ef4444;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+        
+        .success-message {
+            color: #10b981;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+        
+        .message-content {
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        
+        .no-messages {
+            text-align: center;
+            padding: 2rem;
+            background-color: white;
+            border-radius: var(--border-radius);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* Responsive design */
+        @media (max-width: 640px) {
+            .container {
+                padding: 12px;
+            }
+            
+            .message {
+                max-width: 90%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% if error %}
+        <div class="login-container">
+            <h2>Error</h2>
+            <p class="error-message">{{ error }}</p>
+            <a href="/chat-history"><button type="button">Try Again</button></a>
+        </div>
+        {% elif phone_verified %}
+        
+        <header>
+            <h1>Your Chat History</h1>
+            <p>Phone: {{ phone_number }}</p>
+        </header>
+        
+        <div class="chat-container">
+            {% if chat_history|length > 0 %}
+                {% for message in chat_history %}
+                <div class="message {{ message.role }}">
+                    <div class="message-content">{{ message.content }}</div>
+                    <div class="timestamp">{{ message.timestamp }}</div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="no-messages">
+                    <p>No chat history found. Start a conversation via SMS to see your history here.</p>
+                </div>
+            {% endif %}
+        </div>
+        
+        {% elif verification_sent %}
+        
+        <div class="login-container">
+            <h2>Enter Verification Code</h2>
+            <p>We've sent a 6-digit verification code to {{ phone_number }}.</p>
+            
+            <form action="/verify-chat-code" method="post">
+                <input type="hidden" name="phone" value="{{ phone_number }}">
+                
+                <div>
+                    <label for="code">Verification Code:</label>
+                    <input type="text" id="code" name="code" placeholder="Enter 6-digit code" required pattern="[0-9]{6}" maxlength="6">
+                </div>
+                
+                <button type="submit">Verify</button>
+                
+                {% if error %}
+                <p class="error-message">{{ error }}</p>
+                {% endif %}
+            </form>
+        </div>
+        
+        {% else %}
+        
+        <div class="login-container">
+            <h2>View Your Chat History</h2>
+            <p>Enter your phone number to access your chat history.</p>
+            
+            <form action="/request-chat-code" method="post">
+                <div>
+                    <label for="phone">Phone Number:</label>
+                    <input type="tel" id="phone" name="phone" placeholder="(555) 555-5555" required>
+                </div>
+                
+                <button type="submit">Send Verification Code</button>
+                
+                {% if error %}
+                <p class="error-message">{{ error }}</p>
+                {% endif %}
+            </form>
+        </div>
+        
+        {% endif %}
+    </div>
+    
+    <script>
+        // Format phone number as user types
+        document.getElementById('phone')?.addEventListener('input', function(e) {
+            let input = e.target;
+            let value = input.value.replace(/\D/g, ''); // Remove non-digits
+            
+            if (value.length > 10) {
+                value = value.substring(0, 10); // Limit to 10 digits
+            }
+            
+            // Format as (555) 555-5555
+            if (value.length > 6) {
+                input.value = `(${value.substring(0, 3)}) ${value.substring(3, 6)}-${value.substring(6)}`;
+            } else if (value.length > 3) {
+                input.value = `(${value.substring(0, 3)}) ${value.substring(3)}`;
+            } else if (value.length > 0) {
+                input.value = `(${value}`;
+            }
+        });
+        
+        // Scroll to the bottom of chat history
+        window.onload = function() {
+            const chatContainer = document.querySelector('.chat-container');
+            if (chatContainer) {
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+        }
+    </script>
+</body>
+</html>
