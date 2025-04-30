@@ -11,6 +11,7 @@ This project is a question-answering system built with **FastAPI**, **PostgreSQL
 - **pgAdmin**: Database administration through a web interface.  
 - **Docker**: Easy containerization and deployment.  
 - **TextBelt API**: SMS integration for interactive Q&A.  
+- **OpenAI API** (Optional): Enhanced question generation with conversation history.
 
 ---
 
@@ -47,6 +48,10 @@ DATABASE_URL=postgresql://user:password@postgres:5432/ollama_db
 OPEN_WEBUI_API_URL=http://your-server-ip:3001
 OPEN_WEBUI_API_KEY=your-open-webui-api-key
 TEXTBELT_API_KEY=your-textbelt-api-key
+
+# Optional: OpenAI Integration
+USE_OPENAI=false
+OPENAI_API_KEY=your-openai-api-key
 ```
 
 ### 3️⃣ Start the Services with Docker Compose
@@ -71,6 +76,7 @@ docker-compose up --build
 │   ├── database.py            # Database connection handler
 │   ├── embeddings.py          # Vector embedding handler
 │   ├── open_webui_api.py      # API handler for querying LLM
+│   ├── openai_api.py          # OpenAI API integration (optional)
 │   └── textbelt_api.py        # API handler for TextBelt
 ├── docker-compose.yml         # Docker Compose file
 └── Dockerfile                 # Dockerfile for FastAPI backend
@@ -178,6 +184,7 @@ docker-compose up --build
   - `question_text`: TEXT  
   - `category`: TEXT  
   - `embedding`: VECTOR  
+  - `answer_seed`: UUID
 
 - **Table `answers`**  
   - `answer_id`: UUID (Primary Key)  
@@ -209,9 +216,10 @@ docker-compose down
 
 ## 📝 Notes
 
-- **OpenWebUI URL:** Replace `OPEN_WEBUI_API_URL` with your server’s actual URL.  
-- **API Keys:** Keep your `OPEN_WEBUI_API_KEY` and `TEXTBELT_API_KEY` secure.  
-- **Docker Volumes:** Data persists between restarts via Docker volumes.  
+- **OpenWebUI URL:** Replace `OPEN_WEBUI_API_URL` with your server's actual URL.  
+- **API Keys:** Keep your `OPEN_WEBUI_API_KEY`, `TEXTBELT_API_KEY`, and `OPENAI_API_KEY` secure.
+- **Docker Volumes:** Data persists between restarts via Docker volumes.
+- **OpenAI Integration:** Set `USE_OPENAI=true` in your `.env` file to enable OpenAI for enhanced question generation with conversation history.
 
 ---
 
@@ -233,6 +241,7 @@ Contact me for information: JoeLorenzoMontano@gmail.com
 - [PostgreSQL](https://www.postgresql.org)  
 - [pgvector](https://github.com/pgvector/pgvector)  
 - [TextBelt](https://textbelt.com)  
+- [OpenAI](https://openai.com)
 
 ---
 

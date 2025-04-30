@@ -40,6 +40,8 @@ services:
       OPEN_WEBUI_API_KEY: ${OPEN_WEBUI_API_KEY}
       TEXTBELT_API_KEY: ${TEXTBELT_API_KEY}
       ENVIRONMENT: ${ENVIRONMENT}
+      USE_OPENAI: ${USE_OPENAI:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
       - postgres
     extra_hosts:
