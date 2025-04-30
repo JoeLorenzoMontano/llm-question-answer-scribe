@@ -94,6 +94,50 @@ def verify_user(phone_number: str, input_code: str) -> bool:
         cursor.close()
         conn.close()
         
+def is_admin_user(user_id: str) -> bool:
+    """
+    Check if a user has admin privileges.
+    Currently, this checks if the user has the is_admin flag set to TRUE.
+    
+    Args:
+        user_id: The user ID to check
+        
+    Returns:
+        True if the user is an admin, False otherwise
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        # Check if is_admin column exists first
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT 1 
+                FROM information_schema.columns 
+                WHERE table_name = 'users' AND column_name = 'is_admin'
+            ) as column_exists
+        """)
+        
+        column_exists = cursor.fetchone()["column_exists"]
+        
+        if not column_exists:
+            # If the column doesn't exist yet, no admins
+            return False
+        
+        # Check if the user is an admin
+        cursor.execute("SELECT is_admin FROM users WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
+        
+        return user is not None and user.get("is_admin", False)
+    
+    except Exception as e:
+        print(f"Error checking admin status: {e}")
+        return False
+        
+    finally:
+        cursor.close()
+        conn.close()
+        
 def get_user_chat_history(phone_number: str):
     """
     Retrieve chat history (questions and answers) for a specific user by phone number.

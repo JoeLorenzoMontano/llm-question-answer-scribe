@@ -272,8 +272,9 @@
             </div>
         </div>
         
-        <div class="card create-family">
+        <div id="create-family-container" class="card create-family" style="display: none;">
             <h2>Create New Family</h2>
+            <p class="helper-text">As an administrator, you can create new families.</p>
             <form id="create-family-form">
                 <div>
                     <label for="family-name">Family Name:</label>
@@ -282,6 +283,11 @@
                 <button type="submit" class="btn">Create Family</button>
             </form>
             <p id="create-message" class="success-message hidden"></p>
+        </div>
+        
+        <div id="non-admin-message" class="card" style="display: none;">
+            <h2>Family Management</h2>
+            <p>Only administrators can create new families. Please contact your administrator if you need to create a new family.</p>
         </div>
     </div>
     
@@ -320,11 +326,54 @@
     </div>
     
     <script>
-        // Load families when the page loads
-        document.addEventListener('DOMContentLoaded', loadFamilies);
+        // Load families and check admin status when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            loadFamilies();
+            checkAdminStatus();
+        });
         
         // Handle form submissions
         document.getElementById('create-family-form').addEventListener('submit', createFamily);
+        
+        // Check if the current user is an admin
+        async function checkAdminStatus() {
+            try {
+                // For demonstration, we'll use a fixed user ID or attempt to get it from localStorage
+                // In a real app, you would get this from session or auth token
+                const userId = localStorage.getItem('user_id') || getQueryParam('user_id');
+                
+                if (!userId) {
+                    // No user ID, show non-admin message
+                    document.getElementById('non-admin-message').style.display = 'block';
+                    return;
+                }
+                
+                const response = await fetch(`/api/families/check-admin/${userId}`);
+                if (!response.ok) {
+                    throw new Error('Failed to check admin status');
+                }
+                
+                const data = await response.json();
+                
+                if (data.is_admin) {
+                    // User is admin, show family creation form
+                    document.getElementById('create-family-container').style.display = 'block';
+                } else {
+                    // User is not admin, show message
+                    document.getElementById('non-admin-message').style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error checking admin status:', error);
+                // Default to showing non-admin message on error
+                document.getElementById('non-admin-message').style.display = 'block';
+            }
+        }
+        
+        // Helper to get query parameters from URL
+        function getQueryParam(param) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(param);
+        }
         document.getElementById('add-member-form').addEventListener('submit', submitAddMember);
         
         // Format phone number as user types

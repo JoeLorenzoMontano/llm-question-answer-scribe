@@ -30,6 +30,30 @@ async def list_families(request: Request):
         "families.html", 
         {"request": request}
     )
+    
+@router.get("/families/check-admin/{user_id}")
+async def check_admin(user_id: str):
+    """Check if a user is an admin"""
+    try:
+        # Verify UUID
+        try:
+            import uuid
+            user_uuid = uuid.UUID(user_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=400, 
+                detail="Invalid user ID format. Must be a valid UUID."
+            )
+        
+        # Check admin status
+        from database import is_admin_user
+        is_admin = is_admin_user(str(user_uuid))
+        
+        return {"is_admin": is_admin}
+    
+    except Exception as e:
+        logger.error(f"Error checking admin status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/families/list")
 async def get_families():
@@ -183,10 +207,19 @@ async def get_family_members(family_id: str):
 
 @router.post("/families")
 async def create_family(request: FamilyCreationRequest):
-    """Create a new family"""
+    """Create a new family (admin only)"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Check if user is admin if provided
+        if request.user_id:
+            from database import is_admin_user
+            if not is_admin_user(request.user_id):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Only administrators can create new families"
+                )
         
         # Create new family
         family_id = str(uuid.uuid4())
