@@ -523,10 +523,28 @@ async def verify_chat_code(request: Request, phone: str = Form(...), code: str =
             }
         )
 
+# Include family management endpoints
+from family_endpoints import router as family_router
+app.include_router(family_router, prefix="/api")
+
 # Conditionally include dev endpoints
 if ENVIRONMENT in ["development", "testing"]:
     from dev_endpoints import app as dev_app
     app.mount("/dev", dev_app)
+
+@app.on_event("startup")
+async def startup_event():
+    """Run database migrations on app startup"""
+    try:
+        from migrations.migrate import run_migrations
+        logger.info("Running database migrations...")
+        success = run_migrations()
+        if success:
+            logger.info("Database migrations completed successfully.")
+        else:
+            logger.error("Database migrations failed. Check the logs for details.")
+    except Exception as e:
+        logger.error(f"Failed to run database migrations: {e}")
 
 if __name__ == "__main__":
     logger.info("Starting FastAPI server on http://0.0.0.0:8000")
