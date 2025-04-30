@@ -26,6 +26,7 @@ class RegistrationRequest(BaseModel):
     username: str
     password: str
     phone: str
+    family_id: Optional[str] = None
     
 class ChatHistoryRequest(BaseModel):
     phone: str
@@ -33,3 +34,10 @@ class ChatHistoryRequest(BaseModel):
 class VerifyCodeRequest(BaseModel):
     phone: str
     code: str
+    
+class FamilyCreationRequest(BaseModel):
+    family_name: str
+    user_id: Optional[str] = None
+    
+class FamilyMemberAddRequest(BaseModel):
+    phone_number: str

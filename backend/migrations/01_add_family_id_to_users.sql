@@ -16,31 +16,20 @@ BEGIN
         -- Create index on family_id
         CREATE INDEX idx_users_family_id ON users(family_id);
         
-        -- Create default family for each existing user
-        CREATE TEMPORARY TABLE temp_families AS
-        SELECT id, username FROM users WHERE family_id IS NULL;
-
-        -- For each user, create a family and update the user
-        DO $$
+        -- Create a single default family
         DECLARE
-            user_rec RECORD;
-            new_family_id UUID;
+            default_family_id UUID;
         BEGIN
-            FOR user_rec IN SELECT id, username FROM temp_families LOOP
-                -- Create a new family for this user
-                INSERT INTO families (family_name) 
-                VALUES (user_rec.username || '''s Family')
-                RETURNING id INTO new_family_id;
-                
-                -- Update the user with the new family_id
-                UPDATE users SET family_id = new_family_id WHERE id = user_rec.id;
-                
-                RAISE NOTICE 'Created family % for user %', new_family_id, user_rec.id;
-            END LOOP;
-        END$$;
-        
-        -- Drop temporary table
-        DROP TABLE temp_families;
+            -- Create default family
+            INSERT INTO families (family_name) 
+            VALUES ('Default Family')
+            RETURNING id INTO default_family_id;
+            
+            -- Update all users to use this family
+            UPDATE users SET family_id = default_family_id WHERE family_id IS NULL;
+            
+            RAISE NOTICE 'Created default family % for all users', default_family_id;
+        END;
     ELSE
         RAISE NOTICE 'Column family_id already exists in users table, skipping...';
     END IF;

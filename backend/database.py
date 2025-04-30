@@ -23,7 +23,7 @@ def hash_password(password: str) -> str:
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
     return pwd_context.hash(password)
 
-def add_new_user(request: RegistrationRequest, verification_code: str) -> bool:
+def add_new_user(request: RegistrationRequest, verification_code: str, family_id: str = None) -> bool:
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=RealDictCursor)
 
@@ -44,10 +44,19 @@ def add_new_user(request: RegistrationRequest, verification_code: str) -> bool:
         # Generate a new UUID for the user
         user_id = str(uuid.uuid4())
         hashed_password = hash_password(request.password)
+        
+        # Create a new family for this user if no family_id provided
+        if not family_id:
+            family_name = f"{request.username}'s Family"
+            cursor.execute(
+                "INSERT INTO families (family_name) VALUES (%s) RETURNING id",
+                (family_name,)
+            )
+            family_id = cursor.fetchone()["id"]
 
         cursor.execute(
-            "INSERT INTO users (id, username, password_hash, phone_number, verification_code, is_verified) VALUES (%s, %s, %s, %s, %s, %s)",
-            (user_id, request.username, hashed_password, request.phone, verification_code, False)
+            "INSERT INTO users (id, username, password_hash, phone_number, verification_code, is_verified, family_id) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (user_id, request.username, hashed_password, request.phone, verification_code, False, family_id)
         )
 
         conn.commit()
@@ -89,8 +98,7 @@ def get_user_chat_history(phone_number: str):
     """
     Retrieve chat history (questions and answers) for a specific user by phone number.
     
-    For this simplified version, we'll just get all questions and answers in the system since 
-    the schema doesn't track which user created each question/answer.
+    This version filters by the user's family_id to only show relevant questions/answers.
     
     Args:
         phone_number: User's phone number to retrieve history for
@@ -103,7 +111,7 @@ def get_user_chat_history(phone_number: str):
     
     try:
         # First, check if the user exists and is verified
-        cursor.execute("SELECT id, is_verified FROM users WHERE phone_number = %s", (phone_number,))
+        cursor.execute("SELECT id, family_id, is_verified FROM users WHERE phone_number = %s", (phone_number,))
         user = cursor.fetchone()
         
         if not user:
@@ -112,12 +120,12 @@ def get_user_chat_history(phone_number: str):
         if not user.get("is_verified"):
             return {"error": "User not verified"}
         
-        # Since there's no user_id in questions or answers tables,
-        # we'll retrieve all questions and answers in chronological order
-        # This version gets all data - in a real production app, you might want to limit this
+        family_id = user.get("family_id")
+        
+        # Get questions and answers for this family
         query = """
         WITH qa_messages AS (
-            -- Get all questions 
+            -- Get questions belonging to this family
             SELECT 
                 question_id,
                 question_text AS content,
@@ -125,23 +133,26 @@ def get_user_chat_history(phone_number: str):
                 created_at AS timestamp,
                 NULL AS answer_id
             FROM questions
+            WHERE family_id = %s
             
             UNION ALL
             
-            -- Get all answers
+            -- Get answers to questions in this family
             SELECT 
-                question_id,
-                answer_text AS content,
+                a.question_id,
+                a.answer_text AS content,
                 'user' AS role,
-                created_at AS timestamp,
-                answer_id
-            FROM answers
+                a.created_at AS timestamp,
+                a.answer_id
+            FROM answers a
+            JOIN questions q ON a.question_id = q.question_id
+            WHERE q.family_id = %s
         )
         SELECT * FROM qa_messages
         ORDER BY timestamp ASC
         """
         
-        cursor.execute(query)
+        cursor.execute(query, (family_id, family_id))
         history = cursor.fetchall()
         
         # Convert database rows to JSON-friendly format

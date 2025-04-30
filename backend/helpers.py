@@ -39,13 +39,14 @@ textbelt = TextBeltAPI(os.getenv("TEXTBELT_API_KEY"))
 def generate_verification_code():
     return str(random.randint(100000, 999999))
 
-def store_and_return_question(question_text: str, category: str = "general", answer_seed: str = None):
+def store_and_return_question(question_text: str, category: str = "general", answer_seed: str = None, family_id: str = None):
     """
     Stores a newly generated question in the database and returns the inserted question.
     
     :param question_text: The text of the question to store.
     :param category: The category of the question (default: "general").
     :param answer_seed: The previous answer UUID that spawned this question response
+    :param family_id: The family ID to associate with this question (optional)
     :return: A dictionary containing the stored question details.
     """
     question_id = uuid.uuid4()  # Generate unique question ID
@@ -56,9 +57,36 @@ def store_and_return_question(question_text: str, category: str = "general", ans
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # If no family_id provided, try to determine from the answer_seed
+        if not family_id and answer_seed:
+            # Just get the family_id from the question that the answer is linked to
+            cursor.execute("""
+                SELECT q.family_id 
+                FROM answers a 
+                JOIN questions q ON a.question_id = q.question_id
+                WHERE a.answer_id = %s
+            """, (answer_seed,))
+            family_from_answer = cursor.fetchone()
+            if family_from_answer:
+                family_id = family_from_answer.get("family_id")
+        
+        # If still no family_id, get the first family
+        if not family_id:
+            cursor.execute("SELECT id FROM families LIMIT 1")
+            first_family = cursor.fetchone()
+            if first_family:
+                family_id = first_family.get("id")
+            else:
+                # Create a default family if none exists
+                cursor.execute(
+                    "INSERT INTO families (family_name) VALUES ('Default Family') RETURNING id"
+                )
+                family_id = cursor.fetchone().get("id")
+        
         cursor.execute(
-            "INSERT INTO questions (question_id, question_text, embedding, category, answer_seed) VALUES (%s, %s, %s, %s, %s)",
-            (str(question_id), question_text, embedding, category, answer_seed)
+            "INSERT INTO questions (question_id, question_text, embedding, category, answer_seed, family_id) VALUES (%s, %s, %s, %s, %s, %s)",
+            (str(question_id), question_text, embedding, category, answer_seed, family_id)
         )
         conn.commit()
 
@@ -102,11 +130,12 @@ def save_answer_to_db(question_id: str, answer_text: str):
 
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         # Ensure the question exists before inserting the answer
-        cursor.execute("SELECT 1 FROM questions WHERE question_id = %s", (question_id,))
-        if cursor.fetchone() is None:
+        cursor.execute("SELECT question_id FROM questions WHERE question_id = %s", (question_id,))
+        question = cursor.fetchone()
+        if question is None:
             logger.warning(f"Question ID {question_id} not found.")
             raise HTTPException(status_code=404, detail="Question not found.")
 
