@@ -32,8 +32,22 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# Configure Jinja2 templates
-templates = Jinja2Templates(directory="templates")
+# Configure Jinja2 templates - using absolute path to prevent errors
+import os
+current_dir = os.path.dirname(os.path.abspath(__file__))
+templates_dir = os.path.join(current_dir, "templates")
+templates = Jinja2Templates(directory=templates_dir)
+logging.info(f"Using templates directory: {templates_dir}")
+
+# Mount static files if needed
+try:
+    static_dir = os.path.join(current_dir, "static")
+    if not os.path.exists(static_dir):
+        os.makedirs(static_dir)
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+    logging.info(f"Mounted static directory: {static_dir}")
+except Exception as e:
+    logging.warning(f"Could not mount static directory: {e}")
 
 textbelt = TextBeltAPI(TEXTBELT_API_KEY)
 
@@ -364,14 +378,20 @@ async def request_chat_code(request: Request, phone: str = Form(...)):
     Handle request for a verification code to view chat history
     """
     try:
-        # Clean phone number format
-        clean_phone = phone.replace("(", "").replace(")", "").replace(" ", "").replace("-", "")
+        # Add debug logging
+        logging.info(f"Received request for chat code with phone: {phone}")
+        
+        # Clean phone number format - only keep digits
+        clean_phone = ''.join(char for char in phone if char.isdigit())
+        logging.info(f"Cleaned phone number: {clean_phone}")
         
         # Generate verification code
         verification_code = generate_auth_code(clean_phone)
+        logging.info(f"Generated verification code response: {verification_code}")
         
         if isinstance(verification_code, dict) and "error" in verification_code:
             # Handle error case
+            logging.error(f"Error generating auth code: {verification_code['error']}")
             return templates.TemplateResponse(
                 "chat_history.html", 
                 {
@@ -382,13 +402,19 @@ async def request_chat_code(request: Request, phone: str = Form(...)):
                 }
             )
         
+        # Log before sending SMS
+        logging.info(f"Sending verification code via SMS to {clean_phone}")
+        
         # Send the verification code via SMS
         response = textbelt.send_sms(
             phone_number=clean_phone,
             message=f"Your chat history verification code is: {verification_code}"
         )
         
+        logging.info(f"SMS send response: {response}")
+        
         if not response.get("success", False):
+            logging.error(f"Failed to send SMS: {response}")
             return templates.TemplateResponse(
                 "chat_history.html", 
                 {
@@ -400,6 +426,7 @@ async def request_chat_code(request: Request, phone: str = Form(...)):
             )
         
         # Show verification code entry form
+        logging.info(f"Successfully sent verification code, showing code entry form")
         return templates.TemplateResponse(
             "chat_history.html", 
             {
@@ -428,8 +455,8 @@ async def verify_chat_code(request: Request, phone: str = Form(...), code: str =
     Verify the code and show chat history if valid
     """
     try:
-        # Clean phone number
-        clean_phone = phone.replace("(", "").replace(")", "").replace(" ", "").replace("-", "")
+        # Clean phone number - only keep digits
+        clean_phone = ''.join(char for char in phone if char.isdigit())
         
         # Verify the code
         is_valid = verify_user(clean_phone, code)

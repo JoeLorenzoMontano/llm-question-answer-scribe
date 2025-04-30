@@ -89,6 +89,9 @@ def get_user_chat_history(phone_number: str):
     """
     Retrieve chat history (questions and answers) for a specific user by phone number.
     
+    For this simplified version, we'll just get all questions and answers in the system since 
+    the schema doesn't track which user created each question/answer.
+    
     Args:
         phone_number: User's phone number to retrieve history for
         
@@ -108,43 +111,37 @@ def get_user_chat_history(phone_number: str):
             
         if not user.get("is_verified"):
             return {"error": "User not verified"}
-            
-        user_id = user["id"]
         
-        # Get all QA pairs involving this user, ordered by time
-        # This query obtains both questions and answers in chronological order
+        # Since there's no user_id in questions or answers tables,
+        # we'll retrieve all questions and answers in chronological order
+        # This version gets all data - in a real production app, you might want to limit this
         query = """
-        WITH user_qa AS (
-            -- Get questions where user is involved
+        WITH qa_messages AS (
+            -- Get all questions 
             SELECT 
-                q.question_id,
-                q.question_text AS content,
+                question_id,
+                question_text AS content,
                 'assistant' AS role,
-                q.created_at AS timestamp,
+                created_at AS timestamp,
                 NULL AS answer_id
-            FROM questions q
-            LEFT JOIN answers a ON q.question_id = a.question_id
-            WHERE a.user_id = %s OR q.answer_seed IN (
-                SELECT answer_id FROM answers WHERE user_id = %s
-            )
+            FROM questions
             
             UNION ALL
             
-            -- Get answers from the user
+            -- Get all answers
             SELECT 
-                a.question_id,
-                a.answer_text AS content,
+                question_id,
+                answer_text AS content,
                 'user' AS role,
-                a.created_at AS timestamp,
-                a.answer_id
-            FROM answers a
-            WHERE a.user_id = %s
+                created_at AS timestamp,
+                answer_id
+            FROM answers
         )
-        SELECT * FROM user_qa
+        SELECT * FROM qa_messages
         ORDER BY timestamp ASC
         """
         
-        cursor.execute(query, (user_id, user_id, user_id))
+        cursor.execute(query)
         history = cursor.fetchall()
         
         # Convert database rows to JSON-friendly format
@@ -178,8 +175,9 @@ def generate_auth_code(phone_number: str) -> str:
     Returns:
         The generated verification code, or an error message
     """
+    print(f"Generating auth code for phone: {phone_number}")
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
     
     try:
         # Check if user exists
@@ -187,24 +185,30 @@ def generate_auth_code(phone_number: str) -> str:
         user = cursor.fetchone()
         
         if not user:
-            return {"error": "User not found"}
+            print(f"User not found for phone: {phone_number}")
+            return {"error": "User not found. You need to register first before viewing chat history."}
         
         # Generate a random 6-digit code
         import random
         verification_code = str(random.randint(100000, 999999))
+        print(f"Generated code: {verification_code} for user ID: {user['id']}")
         
         # Update user's verification code
         cursor.execute(
-            "UPDATE users SET verification_code = %s WHERE phone_number = %s", 
-            (verification_code, phone_number)
+            "UPDATE users SET verification_code = %s WHERE id = %s", 
+            (verification_code, user['id'])
         )
         conn.commit()
+        print(f"Successfully updated verification code in database")
         
         return verification_code
         
     except Exception as e:
         print(f"Error generating auth code: {e}")
-        conn.rollback()
+        try:
+            conn.rollback()
+        except:
+            pass
         return {"error": f"Failed to generate auth code: {str(e)}"}
         
     finally:

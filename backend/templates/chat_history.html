@@ -137,6 +137,22 @@
             margin-top: 0.5rem;
         }
         
+        .helper-text {
+            color: #4b5563;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+        
+        a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        a:hover {
+            text-decoration: underline;
+        }
+        
         .message-content {
             white-space: pre-wrap;
             word-break: break-word;
@@ -188,6 +204,7 @@
             {% else %}
                 <div class="no-messages">
                     <p>No chat history found. Start a conversation via SMS to see your history here.</p>
+                    <p>Text your first message to get started with your AI-powered family scribe.</p>
                 </div>
             {% endif %}
         </div>
@@ -219,17 +236,22 @@
         <div class="login-container">
             <h2>View Your Chat History</h2>
             <p>Enter your phone number to access your chat history.</p>
+            <p class="helper-text">Use the same phone number you used to register.</p>
             
             <form action="/request-chat-code" method="post">
                 <div>
                     <label for="phone">Phone Number:</label>
                     <input type="tel" id="phone" name="phone" placeholder="(555) 555-5555" required>
+                    <p class="helper-text">Format: (XXX) XXX-XXXX</p>
                 </div>
                 
                 <button type="submit">Send Verification Code</button>
                 
                 {% if error %}
                 <p class="error-message">{{ error }}</p>
+                {% if "User not found" in error %}
+                <p class="helper-text">Need to register? Please <a href="/">sign up here</a> first.</p>
+                {% endif %}
                 {% endif %}
             </form>
         </div>
