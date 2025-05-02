@@ -130,7 +130,7 @@ def save_answer_to_db(question_id: str, answer_text: str):
 
     try:
         conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         # Ensure the question exists before inserting the answer
         cursor.execute("SELECT question_id FROM questions WHERE question_id = %s", (question_id,))
