@@ -1,51 +1,102 @@
 version: '3.8'
 
+# Define a network with host driver for maximum accessibility
+networks:
+  app-network:
+    driver: bridge
+
 services:
   postgres:
     image: ankane/pgvector
     container_name: postgres-db
     restart: always
+    networks:
+      - app-network
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:-user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-ollama_db}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-ollama_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   pgadmin:
     image: dpage/pgadmin4
     container_name: pgadmin
     restart: always
+    networks:
+      - app-network
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
     ports:
       - "5050:80"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+
+  mqtt-broker:
+    image: eclipse-mosquitto:latest
+    container_name: mqtt-broker
+    restart: always
+    networks:
+      - app-network
+    # Expose ports for HAProxy to access
+    ports:
+      - "1883:1883"  # MQTT port
+      - "9001:9001"  # WebSockets port
+    volumes:
+      - ./mqtt/config:/mosquitto/config
+      - ./mqtt/data:/mosquitto/data
+      - ./mqtt/log:/mosquitto/log
+    command: >
+      sh -c "
+        echo 'persistence true' > /mosquitto/config/mosquitto.conf &&
+        echo 'persistence_location /mosquitto/data/' >> /mosquitto/config/mosquitto.conf &&
+        echo 'log_dest file /mosquitto/log/mosquitto.log' >> /mosquitto/config/mosquitto.conf &&
+        echo 'log_type all' >> /mosquitto/config/mosquitto.conf &&
+        echo 'connection_messages true' >> /mosquitto/config/mosquitto.conf &&
+        echo 'listener 1883 0.0.0.0' >> /mosquitto/config/mosquitto.conf &&
+        echo 'protocol mqtt' >> /mosquitto/config/mosquitto.conf &&
+        echo 'listener 9001 0.0.0.0' >> /mosquitto/config/mosquitto.conf &&
+        echo 'protocol websockets' >> /mosquitto/config/mosquitto.conf &&
+        echo 'allow_anonymous true' >> /mosquitto/config/mosquitto.conf &&
+        echo 'max_queued_messages 1000' >> /mosquitto/config/mosquitto.conf &&
+        echo 'message_size_limit 10240' >> /mosquitto/config/mosquitto.conf &&
+        mosquitto -c /mosquitto/config/mosquitto.conf"
 
   backend:
     build: ./backend
     container_name: fastapi-backend
     restart: always
+    networks:
+      - app-network
+    # HAProxy needs to access this container from other containers
     ports:
       - "8001:8000"
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-      OPEN_WEBUI_API_URL: ${OPEN_WEBUI_API_URL}
-      OPEN_WEBUI_API_KEY: ${OPEN_WEBUI_API_KEY}
-      TEXTBELT_API_KEY: ${TEXTBELT_API_KEY}
-      ENVIRONMENT: ${ENVIRONMENT}
+      # Use fallback values for basic operation without .env
+      DATABASE_URL: ${DATABASE_URL:-postgresql://user:password@postgres:5432/ollama_db}
+      OPEN_WEBUI_API_URL: ${OPEN_WEBUI_API_URL:-http://localhost:3001}
+      OPEN_WEBUI_API_KEY: ${OPEN_WEBUI_API_KEY:-defaultkey}
+      TEXTBELT_API_KEY: ${TEXTBELT_API_KEY:-defaultkey}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
       USE_OPENAI: ${USE_OPENAI:-false}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # MQTT configuration - use the container name
+      MQTT_BROKER_HOST: mqtt-broker
+      MQTT_BROKER_PORT: 1883
+      # Set base URL for HTTPS
+      BASE_URL: ${BASE_URL:-https://question-answer.jolomo.io}
     depends_on:
       - postgres
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - mqtt-broker
 
 volumes:
   postgres_data:

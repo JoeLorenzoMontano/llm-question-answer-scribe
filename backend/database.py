@@ -1,12 +1,19 @@
 import psycopg2
-from psycopg2.extras import RealDictCursor
+from psycopg2.extras import RealDictCursor, Json
 from passlib.context import CryptContext
-from request_models import RegistrationRequest
+from request_models import RegistrationRequest, MQTTConfigRequest
 import uuid
 import os
 import re
+import secrets
+import string
+import json
+import logging
+import datetime
+import time
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+logger = logging.getLogger(__name__)
 
 def is_valid_username(username: str) -> bool:
     return bool(re.match(r"^[a-zA-Z0-9._]{3,30}$", username))
@@ -14,9 +21,38 @@ def is_valid_username(username: str) -> bool:
 def is_valid_password(password: str) -> bool:
     return bool(re.match(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$", password))
     
-def get_db_connection():
-    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
-    return conn
+def get_db_connection(max_retries=3, retry_delay=2):
+    """
+    Get a database connection with retry logic.
+    
+    Args:
+        max_retries: Maximum number of retry attempts
+        retry_delay: Initial delay between retries in seconds (will be doubled each retry)
+        
+    Returns:
+        A database connection
+        
+    Raises:
+        Exception: If connection failed after max_retries
+    """
+    last_exception = None
+    
+    for attempt in range(max_retries):
+        try:
+            conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+            return conn
+        except Exception as e:
+            last_exception = e
+            if attempt < max_retries - 1:
+                # Only log and retry if we have attempts left
+                logger.warning(f"Database connection attempt {attempt+1}/{max_retries} failed: {e}")
+                logger.info(f"Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+    
+    # If we get here, all retries failed
+    logger.error(f"Failed to connect to database after {max_retries} attempts")
+    raise last_exception
 
 def hash_password(password: str) -> str:
     # Setup password hashing
@@ -265,6 +301,287 @@ def generate_auth_code(phone_number: str) -> str:
         except:
             pass
         return {"error": f"Failed to generate auth code: {str(e)}"}
+        
+    finally:
+        cursor.close()
+        conn.close()
+
+# MQTT-related database functions
+
+def generate_mqtt_credentials(length=12):
+    """
+    Generate a random username and password for MQTT authentication.
+    
+    Args:
+        length: Length of the generated strings
+        
+    Returns:
+        Tuple of (username, password)
+    """
+    alphabet = string.ascii_letters + string.digits
+    username = ''.join(secrets.choice(alphabet) for _ in range(length))
+    password = ''.join(secrets.choice(alphabet) for _ in range(length))
+    return (username, password)
+
+def get_family_mqtt_config(family_id: str):
+    """
+    Get MQTT configuration for a family.
+    
+    Args:
+        family_id: The family ID to get configuration for
+        
+    Returns:
+        Dictionary with MQTT configuration, or None if not found
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        # Check if the family exists
+        cursor.execute("""
+            SELECT 
+                id, 
+                family_name, 
+                mqtt_enabled, 
+                mqtt_client_id, 
+                mqtt_username, 
+                mqtt_password, 
+                mqtt_topic_prefix, 
+                mqtt_allowed_devices,
+                mqtt_last_connection
+            FROM families 
+            WHERE id = %s
+        """, (family_id,))
+        
+        family = cursor.fetchone()
+        
+        if not family:
+            return None
+            
+        # Convert mqtt_allowed_devices from JSONB to Python dict
+        if family.get("mqtt_allowed_devices"):
+            family["mqtt_allowed_devices"] = json.loads(family["mqtt_allowed_devices"])
+        else:
+            family["mqtt_allowed_devices"] = []
+            
+        # Format last connection timestamp if available
+        if family.get("mqtt_last_connection"):
+            family["mqtt_last_connection"] = family["mqtt_last_connection"].isoformat()
+            
+        return {
+            "family_id": str(family["id"]),
+            "family_name": family["family_name"],
+            "mqtt_enabled": family.get("mqtt_enabled", False),
+            "mqtt_client_id": family.get("mqtt_client_id"),
+            "mqtt_username": family.get("mqtt_username"),
+            "mqtt_password": family.get("mqtt_password"),
+            "mqtt_topic_prefix": family.get("mqtt_topic_prefix"),
+            "mqtt_allowed_devices": family.get("mqtt_allowed_devices", []),
+            "mqtt_last_connection": family.get("mqtt_last_connection")
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting family MQTT config: {e}")
+        return None
+        
+    finally:
+        cursor.close()
+        conn.close()
+
+def update_family_mqtt_config(family_id: str, config: MQTTConfigRequest):
+    """
+    Update MQTT configuration for a family.
+    
+    Args:
+        family_id: The family ID to update
+        config: MQTT configuration request
+        
+    Returns:
+        Dictionary with updated configuration, or error message
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        # Verify the family exists
+        cursor.execute("SELECT id FROM families WHERE id = %s", (family_id,))
+        family = cursor.fetchone()
+        
+        if not family:
+            return {"error": "Family not found"}
+            
+        # Generate credentials if enabled and not provided
+        mqtt_username = config.mqtt_username
+        mqtt_password = config.mqtt_password
+        
+        if config.enabled and not (mqtt_username and mqtt_password):
+            mqtt_username, mqtt_password = generate_mqtt_credentials()
+        
+        # Generate client ID if needed
+        mqtt_client_id = f"family-{family_id}"
+        
+        # Generate topic prefix if not provided
+        mqtt_topic_prefix = config.topic_prefix or f"scribe/families/{family_id}"
+        
+        # Convert allowed devices to JSON
+        allowed_devices_json = Json([]) if not config.allowed_devices else Json([d.dict() for d in config.allowed_devices])
+        
+        # Update the family record
+        cursor.execute("""
+            UPDATE families 
+            SET 
+                mqtt_enabled = %s,
+                mqtt_client_id = %s,
+                mqtt_username = %s,
+                mqtt_password = %s,
+                mqtt_topic_prefix = %s,
+                mqtt_allowed_devices = %s
+            WHERE id = %s
+            RETURNING id
+        """, (
+            config.enabled,
+            mqtt_client_id,
+            mqtt_username,
+            mqtt_password,
+            mqtt_topic_prefix,
+            allowed_devices_json,
+            family_id
+        ))
+        
+        updated = cursor.fetchone()
+        conn.commit()
+        
+        if not updated:
+            return {"error": "Failed to update MQTT configuration"}
+            
+        # Return the updated configuration
+        return {
+            "family_id": family_id,
+            "mqtt_enabled": config.enabled,
+            "mqtt_client_id": mqtt_client_id,
+            "mqtt_username": mqtt_username,
+            "mqtt_password": mqtt_password,
+            "mqtt_topic_prefix": mqtt_topic_prefix,
+            "allowed_devices": config.allowed_devices or []
+        }
+        
+    except Exception as e:
+        logger.error(f"Error updating family MQTT config: {e}")
+        conn.rollback()
+        return {"error": f"Failed to update MQTT configuration: {str(e)}"}
+        
+    finally:
+        cursor.close()
+        conn.close()
+
+def add_mqtt_device_to_family(family_id: str, device_name: str, device_type: str = "generic"):
+    """
+    Add a new allowed MQTT device to a family.
+    
+    Args:
+        family_id: The family ID to update
+        device_name: Name of the device
+        device_type: Type of device (e.g., 'arduino', 'esp32', 'mobile')
+        
+    Returns:
+        Dictionary with device info, or error message
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        # Get current allowed devices
+        cursor.execute("SELECT mqtt_allowed_devices FROM families WHERE id = %s", (family_id,))
+        family = cursor.fetchone()
+        
+        if not family:
+            return {"error": "Family not found"}
+            
+        # Parse current devices list
+        current_devices = []
+        if family.get("mqtt_allowed_devices"):
+            current_devices = json.loads(family["mqtt_allowed_devices"])
+        
+        # Generate a device ID
+        device_id = str(uuid.uuid4())
+        
+        # Add new device
+        new_device = {
+            "device_id": device_id,
+            "device_name": device_name,
+            "device_type": device_type,
+            "created_at": datetime.datetime.now().isoformat()
+        }
+        
+        current_devices.append(new_device)
+        
+        # Update the database
+        cursor.execute(
+            "UPDATE families SET mqtt_allowed_devices = %s WHERE id = %s",
+            (Json(current_devices), family_id)
+        )
+        
+        conn.commit()
+        
+        return new_device
+        
+    except Exception as e:
+        logger.error(f"Error adding MQTT device: {e}")
+        conn.rollback()
+        return {"error": f"Failed to add MQTT device: {str(e)}"}
+        
+    finally:
+        cursor.close()
+        conn.close()
+
+def remove_mqtt_device_from_family(family_id: str, device_id: str):
+    """
+    Remove an allowed MQTT device from a family.
+    
+    Args:
+        family_id: The family ID to update
+        device_id: ID of the device to remove
+        
+    Returns:
+        Success message or error
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        # Get current allowed devices
+        cursor.execute("SELECT mqtt_allowed_devices FROM families WHERE id = %s", (family_id,))
+        family = cursor.fetchone()
+        
+        if not family:
+            return {"error": "Family not found"}
+            
+        # Parse current devices list
+        current_devices = []
+        if family.get("mqtt_allowed_devices"):
+            current_devices = json.loads(family["mqtt_allowed_devices"])
+        
+        # Filter out the device to remove
+        updated_devices = [d for d in current_devices if d.get("device_id") != device_id]
+        
+        # If no devices were removed, the device wasn't found
+        if len(current_devices) == len(updated_devices):
+            return {"error": "Device not found"}
+        
+        # Update the database
+        cursor.execute(
+            "UPDATE families SET mqtt_allowed_devices = %s WHERE id = %s",
+            (Json(updated_devices), family_id)
+        )
+        
+        conn.commit()
+        
+        return {"message": "Device removed successfully"}
+        
+    except Exception as e:
+        logger.error(f"Error removing MQTT device: {e}")
+        conn.rollback()
+        return {"error": f"Failed to remove MQTT device: {str(e)}"}
         
     finally:
         cursor.close()

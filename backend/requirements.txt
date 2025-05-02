@@ -8,3 +8,4 @@ pydantic
 passlib
 jinja2
 python-multipart
+paho-mqtt

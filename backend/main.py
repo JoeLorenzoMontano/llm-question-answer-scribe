@@ -3,7 +3,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request, Form, Depends
 import os
 from database import add_new_user, verify_user, get_user_chat_history, generate_auth_code
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -95,6 +95,27 @@ async def index():
             }
             #verification-box {
                 display: none;
+            }
+            .navbar {
+                background-color: #333;
+                overflow: hidden;
+                border-radius: 5px;
+                margin-bottom: 20px;
+            }
+            .navbar a {
+                float: left;
+                display: block;
+                color: white;
+                text-align: center;
+                padding: 14px 16px;
+                text-decoration: none;
+            }
+            .navbar a:hover {
+                background-color: #ddd;
+                color: black;
+            }
+            .navbar a.active {
+                background-color: #28a745;
             }
         </style>
         <script>
@@ -233,6 +254,11 @@ async def index():
         </script>
     </head>
     <body>
+        <div class="navbar">
+            <a class="active" href="/">Home</a>
+            <a href="/chat-history">Chat History</a>
+            <a href="/mqtt-dashboard">MQTT Dashboard</a>
+        </div>
         <div class="container">
             <h2>Welcome to the Alpha Test</h2>
             <p>We're testing a new AI-driven family scribe system. Enter your phone number below to register and receive a verification code.</p>
@@ -371,6 +397,17 @@ async def chat_history(request: Request):
         "chat_history.html", 
         {"request": request, "phone_verified": False, "verification_sent": False}
     )
+
+@app.get("/mqtt-dashboard", response_class=HTMLResponse)
+async def mqtt_dashboard():
+    """
+    Display the MQTT dashboard
+    """
+    # Get the current directory path
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    # Construct the path to the MQTT dashboard HTML file
+    mqtt_dashboard_path = os.path.join(current_dir, "static", "mqtt-client.html")
+    return FileResponse(mqtt_dashboard_path)
 
 @app.post("/request-chat-code")
 async def request_chat_code(request: Request, phone: str = Form(...)):
@@ -534,17 +571,40 @@ if ENVIRONMENT in ["development", "testing"]:
 
 @app.on_event("startup")
 async def startup_event():
-    """Run database migrations on app startup"""
+    """Run database migrations and initialize MQTT service on app startup"""
+    # Initialize MQTT service - do this first since it has retry logic
+    logger.info("Initializing MQTT service...")
     try:
-        from migrations.migrate import run_migrations
-        logger.info("Running database migrations...")
-        success = run_migrations()
-        if success:
-            logger.info("Database migrations completed successfully.")
-        else:
-            logger.error("Database migrations failed. Check the logs for details.")
+        from mqtt_service import get_mqtt_service
+        mqtt_service = get_mqtt_service()
+        logger.info("MQTT service initialization started (will retry connections in background)")
     except Exception as e:
-        logger.error(f"Failed to run database migrations: {e}")
+        logger.error(f"Failed to initialize MQTT service: {e}")
+    
+    # Run database migrations with retry logic
+    logger.info("Running database migrations...")
+    max_attempts = 5
+    attempt = 0
+    while attempt < max_attempts:
+        try:
+            from migrations.migrate import run_migrations
+            success = run_migrations()
+            if success:
+                logger.info("Database migrations completed successfully.")
+                break
+            else:
+                logger.error("Database migrations failed. Will retry...")
+        except Exception as e:
+            attempt += 1
+            if attempt >= max_attempts:
+                logger.error(f"Failed to run database migrations after {max_attempts} attempts: {e}")
+                break
+            
+            # Wait with exponential backoff
+            wait_time = 2 ** attempt
+            logger.info(f"Database connection failed. Retrying in {wait_time} seconds... (Attempt {attempt}/{max_attempts})")
+            import time
+            time.sleep(wait_time)
 
 if __name__ == "__main__":
     logger.info("Starting FastAPI server on http://0.0.0.0:8000")

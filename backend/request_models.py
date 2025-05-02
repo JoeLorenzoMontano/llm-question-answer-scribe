@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import List, Optional
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
 
 class QuestionRequest(BaseModel):
     question: str
@@ -41,3 +41,22 @@ class FamilyCreationRequest(BaseModel):
     
 class FamilyMemberAddRequest(BaseModel):
     phone_number: str
+
+class MQTTDeviceInfo(BaseModel):
+    device_name: str
+    device_type: str = Field(default="generic", description="Type of device (e.g., 'arduino', 'esp32', 'mobile')")
+    device_id: Optional[str] = None
+    
+class MQTTConfigRequest(BaseModel):
+    enabled: bool = Field(default=True, description="Whether MQTT is enabled for this family")
+    mqtt_username: Optional[str] = None
+    mqtt_password: Optional[str] = None
+    topic_prefix: Optional[str] = None
+    allowed_devices: Optional[List[MQTTDeviceInfo]] = None
+    
+class MQTTMessageRequest(BaseModel):
+    family_id: str
+    device_id: Optional[str] = None
+    message_type: str = Field(default="notification", description="Type of message (e.g., 'notification', 'question')")
+    content: str
+    metadata: Optional[Dict[str, Any]] = None

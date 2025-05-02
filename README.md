@@ -11,6 +11,7 @@ This project is a question-answering system built with **FastAPI**, **PostgreSQL
 - **pgAdmin**: Database administration through a web interface.  
 - **Docker**: Easy containerization and deployment.  
 - **TextBelt API**: SMS integration for interactive Q&A.  
+- **MQTT Integration**: Connect IoT devices to receive and answer questions.
 - **OpenAI API** (Optional): Enhanced question generation with conversation history.
 
 ---
@@ -49,6 +50,10 @@ OPEN_WEBUI_API_URL=http://your-server-ip:3001
 OPEN_WEBUI_API_KEY=your-open-webui-api-key
 TEXTBELT_API_KEY=your-textbelt-api-key
 
+# MQTT Broker
+MQTT_BROKER_HOST=mqtt-broker
+MQTT_BROKER_PORT=1883
+
 # Optional: OpenAI Integration
 USE_OPENAI=false
 OPENAI_API_KEY=your-openai-api-key
@@ -64,6 +69,7 @@ docker-compose up --build
 - **pgAdmin** will be accessible at: `http://localhost:5050`
   - Login: `admin@example.com`
   - Password: `adminpassword`
+- **MQTT Broker** will be accessible at: `localhost:1883` (MQTT) and `localhost:9001` (WebSockets)
 
 ---
 
@@ -77,7 +83,17 @@ docker-compose up --build
 │   ├── embeddings.py          # Vector embedding handler
 │   ├── open_webui_api.py      # API handler for querying LLM
 │   ├── openai_api.py          # OpenAI API integration (optional)
-│   └── textbelt_api.py        # API handler for TextBelt
+│   ├── mqtt_service.py        # MQTT service for IoT device integration
+│   ├── family_endpoints.py    # Family management endpoints
+│   ├── textbelt_api.py        # API handler for TextBelt
+│   └── migrations/            # Database migrations
+├── mqtt/
+│   ├── config/                # MQTT broker configuration
+│   ├── data/                  # MQTT broker data
+│   └── log/                   # MQTT broker logs
+├── examples/
+│   ├── mqtt_client.py         # Example Python MQTT client
+│   └── esp32_mqtt_client/     # Example ESP32 MQTT client
 ├── docker-compose.yml         # Docker Compose file
 └── Dockerfile                 # Dockerfile for FastAPI backend
 ```
@@ -220,6 +236,30 @@ docker-compose down
 - **API Keys:** Keep your `OPEN_WEBUI_API_KEY`, `TEXTBELT_API_KEY`, and `OPENAI_API_KEY` secure.
 - **Docker Volumes:** Data persists between restarts via Docker volumes.
 - **OpenAI Integration:** Set `USE_OPENAI=true` in your `.env` file to enable OpenAI for enhanced question generation with conversation history.
+- **MQTT Integration:** See the `examples/` directory for sample MQTT clients that connect to the system.
+
+---
+
+## 🌐 MQTT Integration
+
+The system includes an MQTT broker for IoT device integration, allowing devices to receive and answer questions.
+
+### MQTT Topics
+
+- `scribe/clients/{device_id}/status` - Device status messages
+- `scribe/families/{family_id}/questions` - Questions for the family
+- `scribe/families/{family_id}/answers` - Answers to questions
+- `scribe/families/{family_id}/notifications` - Notifications for the family
+- `scribe/families/{family_id}/devices/{device_id}/#` - Device-specific messages
+
+### MQTT API Endpoints
+
+- `GET /api/families/{family_id}/mqtt` - Get MQTT configuration for a family
+- `PUT /api/families/{family_id}/mqtt` - Update MQTT configuration
+- `POST /api/families/{family_id}/mqtt/devices` - Add a new allowed MQTT device
+- `DELETE /api/families/{family_id}/mqtt/devices/{device_id}` - Remove an allowed MQTT device
+- `GET /api/families/{family_id}/mqtt/connected-devices` - Get list of connected devices
+- `POST /api/families/{family_id}/mqtt/send-message` - Send a message to devices
 
 ---
 
@@ -241,6 +281,7 @@ Contact me for information: JoeLorenzoMontano@gmail.com
 - [PostgreSQL](https://www.postgresql.org)  
 - [pgvector](https://github.com/pgvector/pgvector)  
 - [TextBelt](https://textbelt.com)  
+- [Eclipse Mosquitto](https://mosquitto.org)
 - [OpenAI](https://openai.com)
 
 ---
