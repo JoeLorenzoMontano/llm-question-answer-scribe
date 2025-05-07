@@ -1,0 +1,23 @@
+{
+  "name": "@question-answer-scribe/mcp-server",
+  "version": "1.0.0",
+  "description": "MCP Server for Question Answer Scribe",
+  "main": "index.js",
+  "bin": {
+    "scribe-mcp": "./bin/scribe-mcp.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "mcp",
+    "claude",
+    "scribe",
+    "question-answer"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "python-shell": "^5.0.0"
+  }
+}
