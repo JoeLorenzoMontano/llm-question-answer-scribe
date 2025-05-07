@@ -1,0 +1,4 @@
+mcp-python-server>=0.1.0
+httpx>=0.25.0
+fastapi>=0.104.0
+uvicorn>=0.23.2
