@@ -254,11 +254,6 @@ async def index():
         </script>
     </head>
     <body>
-        <div class="navbar">
-            <a class="active" href="/">Home</a>
-            <a href="/chat-history">Chat History</a>
-            <a href="/mqtt-dashboard">MQTT Dashboard</a>
-        </div>
         <div class="container">
             <h2>Welcome to the Alpha Test</h2>
             <p>We're testing a new AI-driven family scribe system. Enter your phone number below to register and receive a verification code.</p>
@@ -563,6 +558,10 @@ async def verify_chat_code(request: Request, phone: str = Form(...), code: str =
 # Include family management endpoints
 from family_endpoints import router as family_router
 app.include_router(family_router, prefix="/api")
+
+# Include MCP endpoints for programmatic access 
+from mcp_endpoints import router as mcp_router
+app.include_router(mcp_router, prefix="/mcp")
 
 # Conditionally include dev endpoints
 if ENVIRONMENT in ["development", "testing"]:
