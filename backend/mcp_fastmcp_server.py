@@ -21,7 +21,8 @@ from mcp.server.fastmcp import FastMCP
 mcp = FastMCP("scribe")
 
 # Import database modules
-from backend.database import get_db_connection
+sys.path.append(parent_dir)  # Ensure parent directory is in path
+from database import get_db_connection
 from psycopg2.extras import RealDictCursor
 from passlib.context import CryptContext
 
