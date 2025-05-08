@@ -559,10 +559,6 @@ async def verify_chat_code(request: Request, phone: str = Form(...), code: str =
 from family_endpoints import router as family_router
 app.include_router(family_router, prefix="/api")
 
-# Include MCP endpoints for programmatic access 
-from mcp_endpoints import router as mcp_router
-app.include_router(mcp_router, prefix="/mcp")
-
 # Conditionally include dev endpoints
 if ENVIRONMENT in ["development", "testing"]:
     from dev_endpoints import app as dev_app
